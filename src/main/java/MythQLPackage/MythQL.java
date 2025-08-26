@@ -23,12 +23,12 @@ public class MythQL {
             User user = userStore.authenticate(username, password);
 
             if (user != null) {
-                System.out.println("✅ Inicio de sesión exitoso.");
+                System.out.println("Inicio de sesión exitoso.");
                 System.out.println("Usuario: " + user.getUsername());
                 System.out.println("Roles: " + user.getRoles());
                 break; // si querés que termine al loguearse, sacalo si no
             } else {
-                System.out.println("❌ Usuario o contraseña incorrectos. Intente nuevamente.");
+                System.out.println("Usuario o contraseña incorrectos. Intente nuevamente.");
             }
         }
 

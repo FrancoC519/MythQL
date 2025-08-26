@@ -1,7 +1,0 @@
-{
-  "users": [
-    {"username": "admin", "password": "1234", "roles": ["superuser", "db_owner"]},
-    {"username": "linares", "password": "CSCTT2308", "roles": ["db_owner"]},
-    {"username": "TEST", "password": "1234", "roles": ["reader"]}
-  ]
-}

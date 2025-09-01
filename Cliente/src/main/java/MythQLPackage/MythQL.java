@@ -7,7 +7,7 @@ public class MythQL {
         UserStore userStore = new UserStore();
         Scanner scanner = new Scanner(System.in);
 
-        System.out.println("=== Sistema de Inicio de Sesión ===");
+        System.out.println("=== Sistema de Inicio de Sesion ===");
         while (true) {
             System.out.print("\nIngrese su nombre de usuario (0 para salir): ");
             String username = scanner.nextLine();
@@ -17,18 +17,31 @@ public class MythQL {
                 break;
             }
 
-            System.out.print("Ingrese su contraseña: ");
+            System.out.print("Ingrese su contrasena: ");
             String password = scanner.nextLine();
 
             User user = userStore.authenticate(username, password);
 
             if (user != null) {
-                System.out.println("Inicio de sesión exitoso.");
+                System.out.println("Inicio de sesion exitoso.");
                 System.out.println("Usuario: " + user.getUsername());
                 System.out.println("Roles: " + user.getRoles());
-                break;
+                while(true){
+                    System.out.print("Ingrese una consulta o exit para terminar la sesion: ");
+                    String consulta  = scanner.nextLine();
+                    if (consulta.equals("exit")){
+                        System.out.print("Saliendo del sistema...");
+                        break;
+                    }else{
+                        GestorSintaxis GS = new GestorSintaxis();
+                        Boolean respuesta = GS.enviarConsulta(consulta);
+                        if (respuesta == true){
+                            System.out.print("APROBADO.");
+                        }
+                    }
+                }
             } else {
-                System.out.println("Usuario o contraseña incorrectos. Intente nuevamente.");
+                System.out.println("Usuario o contrasena incorrectos. Intente nuevamente.");
             }
         }
 

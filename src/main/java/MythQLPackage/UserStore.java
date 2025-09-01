@@ -3,19 +3,24 @@ package MythQLPackage;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.io.InputStream;
+import java.util.Scanner;
 
 public class UserStore {
-    private static final String FILE = "C:\\Users\\gabri\\OneDrive\\Documentos\\NetBeansProjects\\MythQL\\src\\main\\java\\MythQLPackage\\users.csv";
+    private static final String FILE = "/users.csv";
     private List<User> users = new ArrayList<>();
 
     public UserStore() {
         load();
     }
 
-    private void load() {
-        try (BufferedReader br = Files.newBufferedReader(Paths.get(FILE))) {
+   private void load() {
+        try (InputStream input = getClass().getResourceAsStream("/users.csv");
+             BufferedReader br = new BufferedReader(new InputStreamReader(input))) {
+
             String line;
-            boolean firstLine = true; // saltar encabezado
+            boolean firstLine = true;
+
             while ((line = br.readLine()) != null) {
                 if (firstLine) { 
                     firstLine = false;
@@ -29,10 +34,11 @@ public class UserStore {
                     users.add(new User(username, password, roles));
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.err.println("Error cargando users.csv: " + e.getMessage());
         }
     }
+
 
     public User authenticate(String username, String password) {
         for (User user : users) {

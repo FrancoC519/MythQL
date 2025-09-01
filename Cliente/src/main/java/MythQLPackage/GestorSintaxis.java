@@ -6,7 +6,7 @@ public class GestorSintaxis {
         
         String regex = "[A-Za-z_][A-Za-z0-9_]*|\\{|\\}|\\(|\\)|,|[0-9]+";
 
-        String[] tokens = consulta.split("  (?=\\{|\\}|\\(|\\)|,)|(?<=\\{|\\}|\\(|\\)|,)");
+        String[] tokens = consulta.split("(?=\\{|\\}|\\(|\\)|,)|(?<=\\{|\\}|\\(|\\)|,)");
 
         for (String t : tokens) {
             if (!t.trim().isEmpty()) {

@@ -3,10 +3,8 @@ package MythQLPackage;
 public class GestorSintaxis {
     
     public Boolean enviarConsulta(String consulta){
-        
-        String regex = "[A-Za-z_][A-Za-z0-9_]*|\\{|\\}|\\(|\\)|,|[0-9]+";
 
-        String[] tokens = consulta.split("(?=\\{|\\}|\\(|\\)|,)|(?<=\\{|\\}|\\(|\\)|,)");
+        String[] tokens = consulta.split(" ");
 
         for (String t : tokens) {
             if (!t.trim().isEmpty()) {
@@ -18,15 +16,17 @@ public class GestorSintaxis {
             throw new IllegalArgumentException("El comando debe empezar con SUMMON TABLE");
         }
 
-        // Después chequeás que haya un identificador (nombre de tabla)
-        String nombreTabla = tokens[2];
-
-        // Y que el siguiente token sea "{"
-        if (!tokens[3].equals("{")) {
-            throw new IllegalArgumentException("Falta '{' después del nombre de tabla");
+        for (int i = 2; i < tokens.length; i++){
+            //Estructura basica de comando SUMMON:
+            //SUMMON TABLE invoices{invoices_id INT SELF STACKABLE, customer VARCHAR(25)}
+            //[0]SUMMON [1]TABLE [2]invoices [3]{ [4]invoices_id [5]INT [6]SELF [8]STACKABLE [9], [10]customer [11]VARCHAR [12]( [13]25 [14]) [15]}
+            
+            if (tokens[i].equals(tokens[2])){
+                String[] part = tokens[2].split("{");
+                
+            }
+                
         }
-
-        // Luego recorrer los campos hasta encontrar "}"
         
         return true;
     }

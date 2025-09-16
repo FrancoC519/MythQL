@@ -1,4 +1,12 @@
+<<<<<<< HEAD
 C:\Users\ESTUDIANTE\Documents\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\GestorSintaxis.java
 C:\Users\ESTUDIANTE\Documents\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\MythQL.java
 C:\Users\ESTUDIANTE\Documents\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\User.java
 C:\Users\ESTUDIANTE\Documents\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\UserStore.java
+=======
+C:\Users\gabri\OneDrive\Documentos\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\ClienteConexion.java
+C:\Users\gabri\OneDrive\Documentos\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\GestorSintaxis.java
+C:\Users\gabri\OneDrive\Documentos\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\MythQL.java
+C:\Users\gabri\OneDrive\Documentos\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\User.java
+C:\Users\gabri\OneDrive\Documentos\NetBeansProjects\MythQL\Cliente\src\main\java\MythQLPackage\UserStore.java
+>>>>>>> 3290dd47d9d26a0d96c538c9229763dffbae8abf

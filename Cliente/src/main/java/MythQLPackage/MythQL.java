@@ -34,10 +34,20 @@ public class MythQL {
                         break;
                     }else{
                         GestorSintaxis GS = new GestorSintaxis();
+<<<<<<< HEAD
                         Boolean respuesta = GS.enviarConsulta(consulta);
                         if (respuesta == true){
                             System.out.println("APROBADO.");
                         }
+=======
+                        if (GS.enviarConsulta(consulta)) {
+                        ClienteConexion conexion = new ClienteConexion("localhost", 12345);
+                        String respuestaServidor = conexion.enviarConsulta(consulta);
+                    System.out.println("Respuesta del servidor: " + respuestaServidor);
+                    } else {
+                    System.out.println("ERROR de sintaxis: consulta no enviada.");
+                    }
+>>>>>>> 3290dd47d9d26a0d96c538c9229763dffbae8abf
                     }
                 }
             } else {

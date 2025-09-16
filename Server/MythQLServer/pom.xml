@@ -7,7 +7,21 @@
     <packaging>jar</packaging>
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>24</maven.compiler.release>
+        <maven.compiler.release>23</maven.compiler.release>
         <exec.mainClass>MythQLServer.MythQLServer</exec.mainClass>
     </properties>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.1.0</version>
+            <configuration>
+                <mainClass>MythQLPackage.MythQL</mainClass>
+                <workingDirectory>${project.basedir}</workingDirectory>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
 </project>

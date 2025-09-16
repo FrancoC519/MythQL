@@ -36,7 +36,7 @@ public class MythQL {
                         GestorSintaxis GS = new GestorSintaxis();
                         Boolean respuesta = GS.enviarConsulta(consulta);
                         if (respuesta == true){
-                            System.out.print("APROBADO.");
+                            System.out.println("APROBADO.");
                         }
                     }
                 }

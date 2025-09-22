@@ -1,0 +1,1 @@
+invoices_id,INT,SELF,STACKABLE,,,customer,VARCHAR,(,25,)

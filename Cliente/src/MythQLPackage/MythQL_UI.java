@@ -1,14 +1,12 @@
-package mythql;
+package MythQLPackage;
 
-import java.awt.*;
 import javax.swing.*;
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.File;
+import javax.swing.text.*;
+import java.awt.*;
 
 public class MythQL_UI extends JFrame {
-
-    private JTabbedPane tabs;  // lo hacemos global para acceder en listeners
+    private JTabbedPane tabs;   // lo hacemos global para acceder en listeners
+    private JTextPane consolePane; // 🔹 consola inferior
 
     public MythQL_UI() {
         setTitle("MYTHQL");
@@ -28,7 +26,7 @@ public class MythQL_UI extends JFrame {
 
         JButton btnExecute = new JButton("Execute");
         JButton btnExecuteSel = new JButton("Execute Selected");
-        JButton btnSacred = new JButton("Sacred Scroll"); // nuevo botón
+        JButton btnSacred = new JButton("Sacred Scroll");
 
         topPanel.add(btnExecute);
         topPanel.add(btnExecuteSel);
@@ -53,8 +51,8 @@ public class MythQL_UI extends JFrame {
         leftPanel.add(lblManagement);
 
         String[] mgmtItems = {
-            "Server Status", "Client Connections", "Users and Privileges",
-            "Status and System Variables", "Data Export", "Data Import/Restore"
+                "Server Status", "Client Connections", "Users and Privileges",
+                "Status and System Variables", "Data Export", "Data Import/Restore"
         };
         for (String item : mgmtItems) {
             JLabel opt = new JLabel(" - " + item);
@@ -86,28 +84,19 @@ public class MythQL_UI extends JFrame {
         add(tabs, BorderLayout.CENTER);
 
         // ----- CONSOLA INFERIOR -----
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.setBackground(Color.BLACK);
-        bottom.setPreferredSize(new Dimension(0, 60));
+        consolePane = new JTextPane();
+        consolePane.setEditable(false);
+        consolePane.setBackground(Color.BLACK);
 
-        // Texto a la izquierda
-        JLabel console = new JLabel("<html>"
-                + "<font color='red'>* Errors come in Red, ask the wizard about error, click the icon on the side<br>"
-                + "</font><font color='green'>* Otherwise, Green</font></html>");
-        console.setFont(new Font("Arial", Font.BOLD, 12));
-        console.setForeground(Color.WHITE); // para que contraste mejor con negro
-        bottom.add(console, BorderLayout.WEST);
+        JScrollPane consoleScroll = new JScrollPane(consolePane);
+        consoleScroll.setPreferredSize(new Dimension(0, 80));
 
-        // Cargar GIF original
+        // Botón con GIF del mago
         ImageIcon iconGif = new ImageIcon("/home/usrlocal/NetBeansProjects/MythQL/C0ej07b.gif");
-
-        // Escalar el GIF (manteniendo animación)
-        int newW = 80;  // ancho deseado
-        int newH = 80;  // alto deseado
+        int newW = 80, newH = 80;
         Image img = iconGif.getImage().getScaledInstance(newW, newH, Image.SCALE_DEFAULT);
         ImageIcon scaledIcon = new ImageIcon(img);
 
-        // Botón con el GIF escalado
         JButton btnGif = new JButton(scaledIcon);
         btnGif.setBorderPainted(false);
         btnGif.setContentAreaFilled(false);
@@ -115,7 +104,6 @@ public class MythQL_UI extends JFrame {
         btnGif.setOpaque(false);
         btnGif.setPreferredSize(new Dimension(newW, newH));
 
-        // Acción al clickear el GIF
         btnGif.addActionListener(e -> {
             JFrame wizardFrame = new JFrame("Wizard");
             wizardFrame.setSize(300, 150);
@@ -127,53 +115,75 @@ public class MythQL_UI extends JFrame {
             wizardFrame.setVisible(true);
         });
 
-        bottom.add(btnGif, BorderLayout.EAST);
-        add(bottom, BorderLayout.SOUTH);
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.add(consoleScroll, BorderLayout.CENTER);
+        bottomPanel.add(btnGif, BorderLayout.EAST);
 
+        add(bottomPanel, BorderLayout.SOUTH);
 
         // ----- EVENTOS BOTONES -----
-        btnExecute.addActionListener(e -> ejecutarTodo());
-        btnExecuteSel.addActionListener(e -> ejecutarSeleccionado());
-        btnSacred.addActionListener(e -> abrirSacredScroll()); // evento del nuevo botón
+        btnExecute.addActionListener(e -> ejecutarConsulta(getCurrentTextArea().getText().trim()));
+        btnExecuteSel.addActionListener(e -> {
+            String sel = getCurrentTextArea().getSelectedText();
+            if (sel == null || sel.isEmpty()) {
+                try {
+                    int caret = getCurrentTextArea().getCaretPosition();
+                    int start = getCurrentTextArea().getLineStartOffset(getCurrentTextArea().getLineOfOffset(caret));
+                    int end = getCurrentTextArea().getLineEndOffset(getCurrentTextArea().getLineOfOffset(caret));
+                    sel = getCurrentTextArea().getText(start, end - start).trim();
+                } catch (Exception ex) {
+                    sel = "";
+                }
+            }
+            ejecutarConsulta(sel);
+        });
+        btnSacred.addActionListener(e -> abrirSacredScroll());
     }
 
-    // Obtener el JTextArea activo
     private JTextArea getCurrentTextArea() {
         JScrollPane scroll = (JScrollPane) tabs.getSelectedComponent();
         JViewport viewport = scroll.getViewport();
         return (JTextArea) viewport.getView();
     }
 
-    private void ejecutarTodo() {
-        JTextArea area = getCurrentTextArea();
-        String texto = area.getText().trim();
-        if (!texto.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ejecutado");
-        } else {
-            JOptionPane.showMessageDialog(this, "No hay código para ejecutar");
+    // 🔹 Método para escribir en consola con color
+    private void logMessage(String message, Color color) {
+        StyledDocument doc = consolePane.getStyledDocument();
+        Style style = consolePane.addStyle("Style", null);
+        StyleConstants.setForeground(style, color);
+        try {
+            doc.insertString(doc.getLength(), message + "\n", style);
+            consolePane.setCaretPosition(doc.getLength()); // auto-scroll
+        } catch (BadLocationException e) {
+            e.printStackTrace();
         }
     }
 
-    private void ejecutarSeleccionado() {
-        JTextArea area = getCurrentTextArea();
-        String seleccionado = area.getSelectedText();
-
-        if (seleccionado == null || seleccionado.isEmpty()) {
-            // si no hay selección, tomar la línea actual
-            try {
-                int caret = area.getCaretPosition();
-                int start = area.getLineStartOffset(area.getLineOfOffset(caret));
-                int end = area.getLineEndOffset(area.getLineOfOffset(caret));
-                seleccionado = area.getText(start, end - start).trim();
-            } catch (Exception ex) {
-                seleccionado = "";
-            }
+    // 🔹 Lógica para ejecutar consultas
+    private void ejecutarConsulta(String consulta) {
+        if (consulta == null || consulta.isEmpty()) {
+            logMessage("ERROR: No hay consulta para ejecutar.", Color.RED);
+            return;
         }
 
-        if (!seleccionado.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Selección ejecutada");
+        if (consulta.equalsIgnoreCase("exit")) {
+            logMessage("Saliendo del sistema...", Color.RED);
+            System.exit(0);
+            return;
+        }
+
+        GestorSintaxis GS = new GestorSintaxis();
+        if (GS.enviarConsulta(consulta)) {
+            logMessage("APROBADO.", Color.GREEN);
+            try {
+                ClienteConexion conexion = new ClienteConexion("localhost", 12345);
+                String respuestaServidor = conexion.enviarConsulta(consulta);
+                logMessage("Respuesta del servidor: " + respuestaServidor, Color.GREEN);
+            } catch (Exception ex) {
+                logMessage("Error al conectar con servidor: " + ex.getMessage(), Color.RED);
+            }
         } else {
-            JOptionPane.showMessageDialog(this, "No hay selección para ejecutar");
+            logMessage("ERROR de sintaxis: consulta no enviada.", Color.RED);
         }
     }
 
@@ -185,21 +195,14 @@ public class MythQL_UI extends JFrame {
         JTextArea textArea = new JTextArea();
         textArea.setEditable(false);
 
-        // Repetimos la palabra "text" muchas veces
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 200; i++) {
             sb.append("text ");
-            if (i % 20 == 0) sb.append("\n"); // salto de línea cada 20
+            if (i % 20 == 0) sb.append("\n");
         }
         textArea.setText(sb.toString());
 
         sacredFrame.add(new JScrollPane(textArea));
         sacredFrame.setVisible(true);
-    }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new MythQL_UI().setVisible(true);
-        });
     }
 }

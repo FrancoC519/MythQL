@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package mythqlserver;
 
 import java.io.FileWriter;
@@ -11,7 +6,6 @@ import java.util.List;
 
 public class CSVDatabaseManager {
 
-    // Crea un archivo CSV para la tabla
     public boolean crearTabla(String nombreTabla, List<String> atributos) {
         try (FileWriter writer = new FileWriter(nombreTabla + ".csv")) {
             // Escribir encabezado con atributos separados por coma

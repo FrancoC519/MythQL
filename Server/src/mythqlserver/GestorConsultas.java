@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package mythqlserver;
 
 import java.util.ArrayList;
@@ -65,7 +60,7 @@ public class GestorConsultas {
             atributos.add(tokens.get(i));
         }
 
-        // Llamamos al gestor de CSV para guardar la tabla
+        // Se llama al gestor de CSV para guardar la tabla
         CSVDatabaseManager db = new CSVDatabaseManager();
         boolean exito = db.crearTabla(nombreTabla, atributos);
 

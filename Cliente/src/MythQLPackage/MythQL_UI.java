@@ -96,7 +96,7 @@ public class MythQL_UI extends JFrame {
         consoleScroll.setPreferredSize(new Dimension(0, 80));
 
         // 🔹 Botón con GIF del mago (potato.gif)
-        ImageIcon iconGif = new ImageIcon(getClass().getResource("/MythQLPackage/potato.gif"));
+        ImageIcon iconGif = new ImageIcon(getClass().getResource("/potato.gif"));
         int newW = 80, newH = 80;
         Image img = iconGif.getImage().getScaledInstance(newW, newH, Image.SCALE_DEFAULT);
         ImageIcon scaledIcon = new ImageIcon(img);

@@ -1,15 +1,8 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package MythQLPackage;
 
 import java.io.*;
-import java.nio.file.*;
 import java.util.*;
 import java.io.InputStream;
-import java.util.Scanner;
 
 public class UserStore {
     private static final String FILE = "/users.csv";

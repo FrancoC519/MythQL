@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 
 public class GestorConsultas {
 
+    private static String baseActiva = null;
+
     public String procesarConsulta(String consulta) {
         List<String> tokens = tokenizar(consulta);
 
@@ -15,10 +17,11 @@ public class GestorConsultas {
         }
 
         String comando = tokens.get(0).toUpperCase();
-
         switch (comando) {
             case "SUMMON":
                 return comandoSummon(tokens);
+            case "UTILIZE":
+                return comandoUtilize(tokens);
             default:
                 return "ERROR: Comando desconocido '" + comando + "'";
         }
@@ -27,47 +30,52 @@ public class GestorConsultas {
     private List<String> tokenizar(String consulta) {
         Pattern pattern = Pattern.compile("[A-Za-z0-9_]+|[{},(){}]");
         Matcher matcher = pattern.matcher(consulta);
-
         List<String> tokens = new ArrayList<>();
         while (matcher.find()) {
-            tokens.add(matcher.group());
+            tokens.add(matcher.group().toUpperCase());
         }
         return tokens;
     }
 
+    private String comandoUtilize(List<String> tokens) {
+        if (tokens.size() != 2) {
+            return "ERROR: Sintaxis UTILIZE inválida. Uso: UTILIZE <nombreDB>";
+        }
+        baseActiva = tokens.get(1);
+        return "OK: Base de datos activa = " + baseActiva;
+    }
+
     private String comandoSummon(List<String> tokens) {
-        // Formato esperado:
-        // SUMMON TABLE nombreBase{atributos}
-        if (tokens.size() < 4) {
-            return "ERROR: Sintaxis SUMMON TABLE inválida.";
+        if (tokens.size() < 3) {
+            return "ERROR: Sintaxis SUMMON inválida.";
         }
 
-        if (!"TABLE".equalsIgnoreCase(tokens.get(1))) {
-            return "ERROR: Se esperaba TABLE después de SUMMON.";
+        // SUMMON DATABASE
+        if ("DATABASE".equals(tokens.get(1))) {
+            String nombreDB = tokens.get(2);
+            CSVDatabaseManager db = new CSVDatabaseManager();
+            boolean exito = db.crearDatabase(nombreDB);
+            return exito ? "OK: Base de datos '" + nombreDB + "' creada."
+                         : "ERROR: No se pudo crear la base de datos.";
         }
 
-        String nombreTabla = tokens.get(2);
-        if (!"{".equals(tokens.get(3))) {
-            return "ERROR: Falta '{' después del nombre de la tabla.";
-        }
-
-        // Extraer atributos hasta "}"
-        List<String> atributos = new ArrayList<>();
-        for (int i = 4; i < tokens.size(); i++) {
-            if ("}".equals(tokens.get(i))) {
-                break;
+        // SUMMON TABLE
+        if ("TABLE".equals(tokens.get(1))) {
+            if (baseActiva == null) {
+                return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
             }
-            atributos.add(tokens.get(i));
+            String nombreTabla = tokens.get(2);
+            List<String> atributos = new ArrayList<>();
+            for (int i = 4; i < tokens.size(); i++) {
+                if ("}".equals(tokens.get(i))) break;
+                atributos.add(tokens.get(i));
+            }
+            CSVDatabaseManager db = new CSVDatabaseManager();
+            boolean exito = db.crearTabla(baseActiva, nombreTabla, atributos);
+            return exito ? "OK: Tabla '" + nombreTabla + "' creada en DB " + baseActiva
+                         : "ERROR: No se pudo crear la tabla.";
         }
 
-        // Se llama al gestor de CSV para guardar la tabla
-        CSVDatabaseManager db = new CSVDatabaseManager();
-        boolean exito = db.crearTabla(nombreTabla, atributos);
-
-        if (exito) {
-            return "OK: Tabla '" + nombreTabla + "' creada con atributos " + atributos;
-        } else {
-            return "ERROR: No se pudo crear la tabla.";
-        }
+        return "ERROR: SUMMON debe ser DATABASE o TABLE.";
     }
 }

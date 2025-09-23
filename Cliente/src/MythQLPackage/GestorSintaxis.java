@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package MythQLPackage;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,34 +17,27 @@ public class GestorSintaxis {
             tokens.add(matcher.group());
         }
         
-        
-        //Estructura de un comando SUMMON:
-        //[SUMMON, TABLE, invoices, {, invoices_id, INT, SELF, STACKABLE, ,, customer, VARCHAR, (, 25, ), }]
-        int comando = 0;
-        switch(comando){
-            case 0:
-                if ("SUMMON".equals(tokens.get(0))){
-                    if (comandoSummon(tokens) == true){
-                        return true;
-                    }
-            }
-            case 1:
-                if(!"SUMMON".equals(tokens.get(0))){
-                   System.out.println("<Place holder>Comando desconocido: Esta versión del programa solamente soporta comandos 'SUMMON'.");
-                   return false;
-                }
+        String comando = tokens.get(0);
+
+        switch (comando) {
+            case "SUMMON":
+                return comandoSummon(tokens);
+            case "BURN":
+                return comandoBurn(tokens);
+            case "BRING":
+                return comandoBring(tokens);
+            default:
+                System.out.println("Comando desconocido: " + comando);
+                return false;
         }
-        
-        return false;
     }
     
-    @SuppressWarnings("unchecked")
+    // ========== SUMMON ==========
     public Boolean comandoSummon(List<String> tokens) {
         int i = 0;
 
         if (tokens.size() < 5) {
-            System.out.println("Error: sintaxis incompleta.");
-            return false;
+            return error("Sintaxis incompleta en SUMMON");
         }
 
         if (!"SUMMON".equals(tokens.get(i++))) return error("Falta SUMMON");
@@ -101,9 +89,80 @@ public class GestorSintaxis {
             }
         }
 
-    return error("Falta '}' de cierre");
-}
+        return error("Falta '}' de cierre en SUMMON");
+    }
 
+    // ========== BURN ==========
+    public Boolean comandoBurn(List<String> tokens) {
+        if (tokens.size() != 3) {
+            return error("Sintaxis incorrecta en BURN. Uso correcto: BURN TABLE <nombreTabla>");
+        }
+
+        if (!"BURN".equals(tokens.get(0))) return error("Falta BURN");
+        if (!"TABLE".equals(tokens.get(1))) return error("Falta TABLE");
+
+        String nombreTabla = tokens.get(2);
+        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido en BURN: " + nombreTabla);
+
+        System.out.println("Comando BURN detectado sobre la tabla: " + nombreTabla);
+        return true;
+    }
+
+    // ========== BRING ==========
+    public Boolean comandoBring(List<String> tokens) {
+        int i = 0;
+        if (!"BRING".equals(tokens.get(i++))) return error("Falta BRING");
+
+        String nombreTabla = tokens.get(i++);
+        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido en BRING: " + nombreTabla);
+
+        if (!"{".equals(tokens.get(i++))) return error("Falta '{' en BRING");
+
+        // Leer columnas
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String columna = tokens.get(i++);
+            if (!columna.matches("[A-Za-z_][A-Za-z0-9_()*]+")) {
+                return error("Columna inválida en BRING: " + columna);
+            }
+            if (",".equals(tokens.get(i))) {
+                i++;
+            }
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
+            return error("Falta '}' en BRING");
+
+        // Clausulas opcionales (CONDITION, CLUSTER, ALIGN, DECLINE, CAP)
+        while (i < tokens.size()) {
+            String token = tokens.get(i++);
+            switch (token) {
+                case "CONDITION":
+                    System.out.println("Cláusula CONDITION detectada");
+                    break;
+                case "CLUSTER":
+                    System.out.println("Cláusula CLUSTER detectada");
+                    break;
+                case "ALIGN":
+                    System.out.println("Cláusula ALIGN detectada");
+                    break;
+                case "DECLINE":
+                    System.out.println("Cláusula DECLINE detectada");
+                    break;
+                case "CAP":
+                    System.out.println("Cláusula CAP detectada");
+                    break;
+                default:
+                    return error("Token inesperado en BRING: " + token);
+            }
+        }
+
+        System.out.println("Comando BRING válido sobre tabla: " + nombreTabla);
+        return true;
+    }
+
+    // ========== ERROR ==========
     private boolean error(String msg) {
         System.out.println("Error de sintaxis: " + msg);
         return false;

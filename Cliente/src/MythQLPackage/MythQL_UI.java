@@ -7,6 +7,8 @@ import java.awt.*;
 public class MythQL_UI extends JFrame {
     private JTabbedPane tabs;   // lo hacemos global para acceder en listeners
     private JTextPane consolePane; // 🔹 consola inferior
+    private JPanel topPanel, leftPanel, bottomPanel; // 🔹 guardamos referencias
+    private boolean mysqlTheme = false; // 🔹 estado del tema
 
     public MythQL_UI() {
         setTitle("MYTHQL");
@@ -17,7 +19,7 @@ public class MythQL_UI extends JFrame {
         setLayout(new BorderLayout());
 
         // ----- HEADER SUPERIOR -----
-        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         topPanel.setBackground(new Color(108, 44, 120)); // violeta
         JLabel title = new JLabel("MYTHQL");
         title.setFont(new Font("Arial Black", Font.BOLD, 22));
@@ -27,10 +29,12 @@ public class MythQL_UI extends JFrame {
         JButton btnExecute = new JButton("Execute");
         JButton btnExecuteSel = new JButton("Execute Selected");
         JButton btnSacred = new JButton("Sacred Scroll");
+        JButton btnTheme = new JButton("Change Theme"); // 🔹 nuevo botón
 
         topPanel.add(btnExecute);
         topPanel.add(btnExecuteSel);
         topPanel.add(btnSacred);
+        topPanel.add(btnTheme); // 🔹 agregado
 
         for (int i = 0; i < 4; i++) {
             JButton gear = new JButton("⚙");
@@ -41,7 +45,7 @@ public class MythQL_UI extends JFrame {
         add(topPanel, BorderLayout.NORTH);
 
         // ----- PANEL IZQUIERDO -----
-        JPanel leftPanel = new JPanel();
+        leftPanel = new JPanel();
         leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
         leftPanel.setPreferredSize(new Dimension(220, 0));
         leftPanel.setBackground(new Color(242, 242, 242));
@@ -115,7 +119,7 @@ public class MythQL_UI extends JFrame {
             wizardFrame.setVisible(true);
         });
 
-        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.add(consoleScroll, BorderLayout.CENTER);
         bottomPanel.add(btnGif, BorderLayout.EAST);
 
@@ -138,6 +142,29 @@ public class MythQL_UI extends JFrame {
             ejecutarConsulta(sel);
         });
         btnSacred.addActionListener(e -> abrirSacredScroll());
+
+        // 🔹 evento del nuevo botón
+        btnTheme.addActionListener(e -> toggleTheme());
+    }
+
+    private void toggleTheme() {
+        if (!mysqlTheme) {
+            // 🔹 Colores estilo MySQL Workbench
+            topPanel.setBackground(new Color(230, 242, 255)); // azul muy claro
+            leftPanel.setBackground(Color.WHITE);
+            bottomPanel.setBackground(new Color(230, 242, 255));
+            consolePane.setBackground(Color.WHITE);
+            consolePane.setForeground(Color.BLACK);
+        } else {
+            // 🔹 Volver al tema original
+            topPanel.setBackground(new Color(108, 44, 120));
+            leftPanel.setBackground(new Color(242, 242, 242));
+            bottomPanel.setBackground(null);
+            consolePane.setBackground(Color.BLACK);
+            consolePane.setForeground(Color.WHITE);
+        }
+        mysqlTheme = !mysqlTheme;
+        repaint();
     }
 
     private JTextArea getCurrentTextArea() {
@@ -146,20 +173,18 @@ public class MythQL_UI extends JFrame {
         return (JTextArea) viewport.getView();
     }
 
-    // 🔹 Método para escribir en consola con color
     private void logMessage(String message, Color color) {
         StyledDocument doc = consolePane.getStyledDocument();
         Style style = consolePane.addStyle("Style", null);
         StyleConstants.setForeground(style, color);
         try {
             doc.insertString(doc.getLength(), message + "\n", style);
-            consolePane.setCaretPosition(doc.getLength()); // auto-scroll
+            consolePane.setCaretPosition(doc.getLength());
         } catch (BadLocationException e) {
             e.printStackTrace();
         }
     }
 
-    // 🔹 Lógica para ejecutar consultas
     private void ejecutarConsulta(String consulta) {
         if (consulta == null || consulta.isEmpty()) {
             logMessage("ERROR: No hay consulta para ejecutar.", Color.RED);

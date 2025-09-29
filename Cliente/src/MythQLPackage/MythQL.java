@@ -5,9 +5,7 @@ import javax.swing.*;
 public class MythQL {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            UserStore userStore = new UserStore();
-
-            MythQL_Login loginDialog = new MythQL_Login(null, userStore);
+            MythQL_Login loginDialog = new MythQL_Login(null);
             loginDialog.setVisible(true);
 
             if (loginDialog.isAuthenticated()) {

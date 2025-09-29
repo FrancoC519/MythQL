@@ -9,6 +9,7 @@ import java.net.Socket;
 public class MythQLServer {
     public static void main(String[] args) {
         int port = 12345;
+        UserStore userStore = new UserStore();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Servidor MythQL escuchando en puerto " + port);
@@ -20,13 +21,30 @@ public class MythQLServer {
                 BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-                String consulta = in.readLine();
-                System.out.println("Consulta recibida: " + consulta);
+                // --- Autenticación ---
 
+                String username = in.readLine();
+                System.out.println(username);
+                String password = in.readLine();
+                System.out.println(password);
+                
+                User user = userStore.authenticate(username, password);
+
+                if (user == null) {
+                    out.println("ERROR: Autenticación fallida.");
+                    continue;
+                }
+
+                out.println("OK : Sesión iniciada como " + user.getUsername() + " con roles " + user.getRoles());
+
+                // --- Procesar consultas ---
+                String consulta;
                 GestorConsultas gestor = new GestorConsultas();
-                String respuesta = gestor.procesarConsulta(consulta);
-
-                out.println(respuesta);
+                while ((consulta = in.readLine()) != null) {
+                    System.out.println("Consulta recibida: " + consulta);
+                    String respuesta = gestor.procesarConsulta(consulta);
+                    out.println(respuesta);
+                }
 
                 clientSocket.close();
             }

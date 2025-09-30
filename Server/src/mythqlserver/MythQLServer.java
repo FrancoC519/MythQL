@@ -1,38 +1,30 @@
 package mythqlserver;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
+import java.util.*;
 
 public class MythQLServer {
-    public static void main(String[] args) {
-        int port = 12345;
+    private static final int PORT = 12345;
+    private UserStore userStore = new UserStore();
+    private Map<String, User> sesiones = new HashMap<>(); // token -> usuario
 
-        try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Servidor MythQL escuchando en puerto " + port);
+    public void start() {
+        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+            System.out.println("Servidor escuchando en puerto " + PORT);
 
             while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("Cliente conectado: " + clientSocket.getInetAddress());
+                Socket socket = serverSocket.accept();
+                System.out.println("Cliente conectado: " + socket.getInetAddress());
 
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-
-                String consulta = in.readLine();
-                System.out.println("Consulta recibida: " + consulta);
-
-                GestorConsultas gestor = new GestorConsultas();
-                String respuesta = gestor.procesarConsulta(consulta);
-
-                out.println(respuesta);
-
-                clientSocket.close();
+                ClientHandler handler = new ClientHandler(socket, userStore, sesiones);
+                new Thread(handler).start();
             }
-
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Error en servidor: " + e.getMessage());
         }
+    }
+
+    public static void main(String[] args) {
+        new MythQLServer().start();
     }
 }

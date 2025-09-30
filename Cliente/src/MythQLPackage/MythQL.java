@@ -5,16 +5,15 @@ import javax.swing.*;
 public class MythQL {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            UserStore userStore = new UserStore();
+            MythQL_Login login = new MythQL_Login(null);
+            login.setVisible(true);
 
-            MythQL_Login loginDialog = new MythQL_Login(null, userStore);
-            loginDialog.setVisible(true);
-
-            if (loginDialog.isAuthenticated()) {
-                new MythQL_UI().setVisible(true);
+            String token = login.getToken();
+            if (token != null) {
+                MythQL_UI ui = new MythQL_UI(token); // ✅ token recibido
+                ui.setVisible(true);
             } else {
-                System.out.println("Aplicación cerrada: login fallido o cancelado.");
-                System.exit(0);
+                System.out.println("No se pudo iniciar sesión.");
             }
         });
     }

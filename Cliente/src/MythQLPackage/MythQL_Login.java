@@ -4,14 +4,12 @@ import javax.swing.*;
 import java.awt.*;
 
 public class MythQL_Login extends JDialog {
-
     private JTextField txtUsername;
     private JPasswordField txtPassword;
-    private boolean authenticated = false;
-    private User authenticatedUser;
+    private String token = null;
 
-    public MythQL_Login(Frame parent, UserStore userStore) {
-        super(parent, "Login - MYTHQL", true); // modal
+    public MythQL_Login(Frame parent) {
+        super(parent, "Login - MYTHQL", true);
         setSize(300, 200);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
@@ -34,18 +32,16 @@ public class MythQL_Login extends JDialog {
 
         add(panel, BorderLayout.CENTER);
 
-        // Acción login
         btnLogin.addActionListener(e -> {
             String username = txtUsername.getText().trim();
             String password = new String(txtPassword.getPassword());
 
-            User user = userStore.authenticate(username, password);
-            if (user != null) {
-                authenticated = true;
-                authenticatedUser = user;
+            ClienteConexion conn = new ClienteConexion("localhost", 12345);
+            token = conn.login(username, password); // ✅ método login ahora existe
+
+            if (token != null) {
                 JOptionPane.showMessageDialog(this,
-                        "Inicio de sesión exitoso.\nUsuario: " + user.getUsername() +
-                        "\nRoles: " + user.getRoles(),
+                        "Inicio de sesión exitoso.\nUsuario: " + username,
                         "Bienvenido", JOptionPane.INFORMATION_MESSAGE);
                 dispose();
             } else {
@@ -55,18 +51,13 @@ public class MythQL_Login extends JDialog {
             }
         });
 
-        // Acción cancelar
         btnCancel.addActionListener(e -> {
-            authenticated = false;
+            token = null;
             dispose();
         });
     }
 
-    public boolean isAuthenticated() {
-        return authenticated;
-    }
-
-    public User getAuthenticatedUser() {
-        return authenticatedUser;
+    public String getToken() {
+        return token;
     }
 }

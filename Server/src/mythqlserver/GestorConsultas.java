@@ -17,6 +17,7 @@ public class GestorConsultas {
         }
 
         String comando = tokens.get(0).toUpperCase();
+        System.out.println(comando);
         switch (comando) {
             case "SUMMON":
                 return comandoSummon(tokens);

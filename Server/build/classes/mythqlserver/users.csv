@@ -1,0 +1,4 @@
+username,password,roles
+admin,1234,superuser;db_owner
+linares,LOCALTT2308,db_owner
+TEST,1234,reader

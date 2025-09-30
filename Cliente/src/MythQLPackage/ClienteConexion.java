@@ -1,12 +1,6 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package MythQLPackage;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+
+import java.io.*;
 import java.net.Socket;
 
 public class ClienteConexion {
@@ -18,20 +12,35 @@ public class ClienteConexion {
         this.port = port;
     }
 
-    public String enviarConsulta(String consulta) {
+    // 🔹 login devuelve token o null si falla
+    public String login(String username, String password) {
         try (Socket socket = new Socket(host, port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            // Enviar consulta
-            out.println(consulta);
+            out.println("LOGIN " + username + " " + password);
+            String respuesta = in.readLine();
+            if (respuesta != null && respuesta.startsWith("OK")) {
+                return respuesta.split(" ")[1]; // token
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
-            // Leer respuesta del servidor
+    // 🔹 enviar consulta usando token
+    public String enviarConsultaConToken(String token, String consulta) {
+        try (Socket socket = new Socket(host, port);
+             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+
+            out.println("QUERY " + token + " " + consulta);
             return in.readLine();
 
         } catch (Exception e) {
             e.printStackTrace();
-            return "ERROR: No se pudo conectar con el servidor.";
+            return "ERROR: no se pudo conectar al servidor.";
         }
     }
 }

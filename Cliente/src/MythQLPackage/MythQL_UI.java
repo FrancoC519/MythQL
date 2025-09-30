@@ -5,12 +5,15 @@ import javax.swing.text.*;
 import java.awt.*;
 
 public class MythQL_UI extends JFrame {
-    private JTabbedPane tabs;   // lo hacemos global para acceder en listeners
-    private JTextPane consolePane; // 🔹 consola inferior
-    private JPanel topPanel, leftPanel, bottomPanel; // 🔹 guardamos referencias
-    private boolean mysqlTheme = false; // 🔹 estado del tema
+    private JTabbedPane tabs;
+    private JTextPane consolePane;
+    private JPanel topPanel, leftPanel, bottomPanel;
+    private boolean mysqlTheme = false;
+    private String token; // 🔹 token del login
 
-    public MythQL_UI() {
+    public MythQL_UI(String token) { // 🔹 recibimos token del login
+        this.token = token;
+
         setTitle("MYTHQL");
         setSize(1100, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -20,7 +23,7 @@ public class MythQL_UI extends JFrame {
 
         // ----- HEADER SUPERIOR -----
         topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        topPanel.setBackground(new Color(108, 44, 120)); // violeta
+        topPanel.setBackground(new Color(108, 44, 120));
         JLabel title = new JLabel("MYTHQL");
         title.setFont(new Font("Arial Black", Font.BOLD, 22));
         title.setForeground(Color.RED);
@@ -29,12 +32,12 @@ public class MythQL_UI extends JFrame {
         JButton btnExecute = new JButton("Execute");
         JButton btnExecuteSel = new JButton("Execute Selected");
         JButton btnSacred = new JButton("Sacred Scroll");
-        JButton btnTheme = new JButton("Change Theme"); // 🔹 nuevo botón
+        JButton btnTheme = new JButton("Change Theme");
 
         topPanel.add(btnExecute);
         topPanel.add(btnExecuteSel);
         topPanel.add(btnSacred);
-        topPanel.add(btnTheme); // 🔹 agregado
+        topPanel.add(btnTheme);
 
         for (int i = 0; i < 4; i++) {
             JButton gear = new JButton("⚙");
@@ -95,18 +98,12 @@ public class MythQL_UI extends JFrame {
         JScrollPane consoleScroll = new JScrollPane(consolePane);
         consoleScroll.setPreferredSize(new Dimension(0, 80));
 
-        // 🔹 Botón con GIF del mago (potato.gif)
-        ImageIcon iconGif = new ImageIcon(getClass().getResource("/potato.gif"));
-        int newW = 80, newH = 80;
-        Image img = iconGif.getImage().getScaledInstance(newW, newH, Image.SCALE_DEFAULT);
-        ImageIcon scaledIcon = new ImageIcon(img);
-
-        JButton btnGif = new JButton(scaledIcon);
+        JButton btnGif = new JButton(new ImageIcon(getClass().getResource("/potato.gif")));
         btnGif.setBorderPainted(false);
         btnGif.setContentAreaFilled(false);
         btnGif.setFocusPainted(false);
         btnGif.setOpaque(false);
-        btnGif.setPreferredSize(new Dimension(newW, newH));
+        btnGif.setPreferredSize(new Dimension(80, 80));
 
         btnGif.addActionListener(e -> {
             JFrame wizardFrame = new JFrame("Wizard");
@@ -122,7 +119,6 @@ public class MythQL_UI extends JFrame {
         bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.add(consoleScroll, BorderLayout.CENTER);
         bottomPanel.add(btnGif, BorderLayout.EAST);
-
         add(bottomPanel, BorderLayout.SOUTH);
 
         // ----- EVENTOS BOTONES -----
@@ -142,9 +138,34 @@ public class MythQL_UI extends JFrame {
             ejecutarConsulta(sel);
         });
         btnSacred.addActionListener(e -> abrirSacredScroll());
-
-        // 🔹 evento del nuevo botón
         btnTheme.addActionListener(e -> toggleTheme());
+    }
+
+    private void ejecutarConsulta(String consulta) {
+        if (consulta == null || consulta.isEmpty()) {
+            logMessage("ERROR: No hay consulta para ejecutar.", Color.RED);
+            return;
+        }
+
+        if (consulta.equalsIgnoreCase("exit")) {
+            logMessage("Saliendo del sistema...", Color.RED);
+            System.exit(0);
+            return;
+        }
+
+        GestorSintaxis GS = new GestorSintaxis();
+        if (GS.enviarConsulta(consulta)) {
+            logMessage("APROBADO.", Color.GREEN);
+            try {
+                ClienteConexion conexion = new ClienteConexion("localhost", 12345);
+                String respuestaServidor = conexion.enviarConsultaConToken(token, consulta); // 🔹 uso del token
+                logMessage("Respuesta del servidor: " + respuestaServidor, Color.GREEN);
+            } catch (Exception ex) {
+                logMessage("Error al conectar con servidor: " + ex.getMessage(), Color.RED);
+            }
+        } else {
+            logMessage("ERROR de sintaxis: consulta no enviada.", Color.RED);
+        }
     }
 
     private void toggleTheme() {
@@ -184,34 +205,7 @@ public class MythQL_UI extends JFrame {
             e.printStackTrace();
         }
     }
-
-    private void ejecutarConsulta(String consulta) {
-        if (consulta == null || consulta.isEmpty()) {
-            logMessage("ERROR: No hay consulta para ejecutar.", Color.RED);
-            return;
-        }
-
-        if (consulta.equalsIgnoreCase("exit")) {
-            logMessage("Saliendo del sistema...", Color.RED);
-            System.exit(0);
-            return;
-        }
-
-        GestorSintaxis GS = new GestorSintaxis();
-        if (GS.enviarConsulta(consulta)) {
-            logMessage("APROBADO.", Color.GREEN);
-            try {
-                ClienteConexion conexion = new ClienteConexion("localhost", 12345);
-                String respuestaServidor = conexion.enviarConsulta(consulta);
-                logMessage("Respuesta del servidor: " + respuestaServidor, Color.GREEN);
-            } catch (Exception ex) {
-                logMessage("Error al conectar con servidor: " + ex.getMessage(), Color.RED);
-            }
-        } else {
-            logMessage("ERROR de sintaxis: consulta no enviada.", Color.RED);
-        }
-    }
-
+    
     private void abrirSacredScroll() {
         JFrame sacredFrame = new JFrame("Sacred Scroll");
         sacredFrame.setSize(400, 400);

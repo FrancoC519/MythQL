@@ -12,7 +12,6 @@ public class ClienteConexion {
         this.port = port;
     }
 
-    // 🔹 login devuelve token o null si falla
     public String login(String username, String password) {
         try (Socket socket = new Socket(host, port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -21,7 +20,7 @@ public class ClienteConexion {
             out.println("LOGIN " + username + " " + password);
             String respuesta = in.readLine();
             if (respuesta != null && respuesta.startsWith("OK")) {
-                return respuesta.split(" ")[1]; // token
+                return respuesta.split(" ")[1];
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -29,12 +28,16 @@ public class ClienteConexion {
         return null;
     }
 
-    // 🔹 enviar consulta usando token
+
     public String enviarConsultaConToken(String token, String consulta) {
         try (Socket socket = new Socket(host, port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
              BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
+            if (consulta.startsWith("LOGOUT")){
+                out.println(consulta);
+            }else
+            
             out.println("QUERY " + token + " " + consulta);
             return in.readLine();
 

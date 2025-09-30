@@ -7,21 +7,33 @@ import java.util.List;
 
 public class CSVDatabaseManager {
 
-    private final String dbPath = "Databases/";
+
     private final String infoPath = "Databases/InfoDB/";
 
-    public boolean crearDatabase(String nombreDB) {
-        try {
-            File carpeta = new File(dbPath);
-            if (!carpeta.exists()) carpeta.mkdirs();
-            File dbFile = new File(dbPath + nombreDB + ".csv");
-            if (dbFile.exists()) return false;
-            return dbFile.createNewFile();
-        } catch (IOException e) {
-            e.printStackTrace();
+    private final String dbPath = "Databases/";
+
+public boolean crearDatabase(String nombreDB) {
+    try {
+        File carpeta = new File(dbPath);
+        if (!carpeta.exists()) carpeta.mkdirs();
+
+        File dbFile = new File(carpeta, nombreDB + ".csv"); // <-- ruta más limpia
+        System.out.println("Intentando crear DB en: " + dbFile.getAbsolutePath());
+
+        if (dbFile.exists()) {
+            System.out.println("Ya existe: " + dbFile.getAbsolutePath());
             return false;
         }
+
+        boolean creado = dbFile.createNewFile();
+        System.out.println("¿Archivo creado?: " + creado);
+        return creado;
+    } catch (IOException e) {
+        e.printStackTrace();
+        return false;
     }
+}
+
 
     public boolean crearTabla(String dbName, String nombreTabla, List<String> atributos) {
         try {

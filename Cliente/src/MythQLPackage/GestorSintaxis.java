@@ -14,7 +14,7 @@ public class GestorSintaxis {
         
         while (matcher.find()) {
             String token = matcher.group();
-            tokens.add(token.toUpperCase()); // case-insensitive
+            tokens.add(token.toUpperCase());
             System.out.println("TOKEN: " + token);
         }
         
@@ -28,6 +28,8 @@ public class GestorSintaxis {
                 return comandoBring(tokens);
             case "UTILIZE":
                 return comandoUtilize(tokens);
+            case "LOGOUT":
+                return comandoLOGOUT(tokens);
             default:
                 System.out.println("Comando desconocido: " + comando);
                 return false;
@@ -46,7 +48,13 @@ public class GestorSintaxis {
         System.out.println("Base de datos activa: " + nombreDB);
         return true;
     }
+    
+    // ========== LOGOUT ==========
+    public Boolean comandoLOGOUT(List<String> tokens) {
 
+        return true;
+    }
+    
     // ========== SUMMON ==========
     public Boolean comandoSummon(List<String> tokens) {
         if (tokens.size() < 3) {

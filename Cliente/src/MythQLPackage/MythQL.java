@@ -10,7 +10,7 @@ public class MythQL {
 
             String token = login.getToken();
             if (token != null) {
-                MythQL_UI ui = new MythQL_UI(token); // ✅ token recibido
+                MythQL_UI ui = new MythQL_UI(token);
                 ui.setVisible(true);
             } else {
                 System.out.println("No se pudo iniciar sesión.");

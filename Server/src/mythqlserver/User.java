@@ -6,6 +6,7 @@ public class User {
     private String username;
     private String password;
     private List<String> roles;
+    private String baseActiva;
 
     public User(String username, String password, List<String> roles) {
         this.username = username;
@@ -20,5 +21,13 @@ public class User {
     @Override
     public String toString() {
         return "User{" + "username='" + username + '\'' + ", roles=" + roles + '}';
+    }
+    
+    public String getBaseActiva() {
+        return baseActiva;
+    }
+
+    public void setBaseActiva(String baseActiva) {
+        this.baseActiva = baseActiva;
     }
 }

@@ -1,33 +1,31 @@
 package mythqlserver;
-
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
 
 public class ClientHandler implements Runnable {
-    private static final long TIMEOUT = 600000;
     private Socket socket;
     private UserStore userStore;
     private Map<String, User> sesiones;
-    private String tokenAsignado = null;
-    private long lastActivity;
+    private String tokenAsignado = null; // token actual del cliente
+    private String token;
+
+    private GestorConsultas gc = new GestorConsultas();
 
     public ClientHandler(Socket socket, UserStore userStore, Map<String, User> sesiones) {
         this.socket = socket;
         this.userStore = userStore;
         this.sesiones = sesiones;
-        this.lastActivity = System.currentTimeMillis();
     }
 
     @Override
     public void run() {
-        new Thread(this::monitorTimeout).start();
         try (BufferedReader in = new BufferedReader(
                 new InputStreamReader(socket.getInputStream()));
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true)) {
+
             String mensaje;
             while ((mensaje = in.readLine()) != null) {
-                lastActivity = System.currentTimeMillis();
                 System.out.println("Recibido: " + mensaje);
                 String[] partes = mensaje.split(" ", 3);
                 if (partes.length < 1) {
@@ -35,6 +33,7 @@ public class ClientHandler implements Runnable {
                     continue;
                 }
                 String comando = partes[0].toUpperCase();
+
                 switch (comando) {
                     case "LOGIN":
                         if (partes.length < 3) {
@@ -43,6 +42,7 @@ public class ClientHandler implements Runnable {
                         }
                         manejarLogin(partes[1], partes[2], out);
                         break;
+
                     case "QUERY":
                         if (partes.length < 3) {
                             out.println("ERROR Uso: QUERY token consulta");
@@ -50,6 +50,7 @@ public class ClientHandler implements Runnable {
                         }
                         manejarConsulta(partes[1], partes[2], out);
                         break;
+
                     case "LOGOUT":
                         if (partes.length < 2) {
                             out.println("ERROR Uso: LOGOUT token");
@@ -57,13 +58,13 @@ public class ClientHandler implements Runnable {
                         }
                         manejarLogout(partes[1], out);
                         return;
+
                     default:
                         out.println("ERROR Comando desconocido");
                 }
             }
         } catch (Exception e) {
             System.err.println("Error en cliente: " + e.getMessage());
-        
         }
     }
 
@@ -73,6 +74,7 @@ public class ClientHandler implements Runnable {
             out.println("ERROR credenciales invalidas");
             return;
         }
+
         synchronized (sesiones) {
             boolean yaLogueado = sesiones.values().stream()
                     .anyMatch(u -> u.getUsername().equals(username));
@@ -90,12 +92,14 @@ public class ClientHandler implements Runnable {
 
     private void manejarConsulta(String token, String consulta, PrintWriter out) {
         User user = sesiones.get(token);
+        this.token = token;
+
         if (user == null) {
             out.println("ERROR sesion no valida");
             return;
         }
-        GestorConsultas GC = new GestorConsultas();
-        String resultado = GC.procesarConsulta(consulta);
+
+        String resultado = gc.procesarConsulta(consulta, user);
         out.println("RESULT " + resultado);
         System.out.println("Consulta de " + user.getUsername() + ": " + consulta);
     }
@@ -110,18 +114,7 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    private void monitorTimeout() {
-        try {
-            while (true) {
-                Thread.sleep(30000);
-                if (tokenAsignado != null &&
-                        System.currentTimeMillis() - lastActivity > TIMEOUT) {
-                    sesiones.remove(tokenAsignado);
-                    System.out.println("Sesion expirada por inactividad: " + tokenAsignado);
-                    socket.close();
-                    break;
-                }
-            }
-        } catch (Exception ignored) {}
+    public User getUser() {
+        return sesiones.get(token);
     }
 }

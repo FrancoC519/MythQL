@@ -125,60 +125,57 @@ public class GestorSintaxis {
         return error("Se esperaba DATABASE o TABLE después de SUMMON");
     }
 
-    // ========== BURN ==========
+      // ========== BURN ==========
     public Boolean comandoBurn(List<String> tokens) {
         if (tokens.size() != 3) {
-            return error("Sintaxis incorrecta en BURN. Uso correcto: BURN TABLE <nombreTabla>");
+            return error("Sintaxis incorrecta en BURN. Uso correcto: BURN DATABASE <nombreDB> o BURN TABLE <nombreTabla>");
         }
-        if (!"TABLE".equals(tokens.get(1))) return error("Falta TABLE");
-        String nombreTabla = tokens.get(2);
-        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
-            return error("Nombre de tabla inválido en BURN: " + nombreTabla);
 
-        System.out.println("Comando BURN detectado sobre la tabla: " + nombreTabla);
-        return true;
-    }
+        String tipo = tokens.get(1);
+        String nombre = tokens.get(2);
+
+        if ("TABLE".equals(tipo)) {
+            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                return error("Nombre de tabla inválido en BURN: " + nombre);
+            }
+            System.out.println("Comando BURN detectado sobre la tabla: " + nombre);
+            return true;
+        } 
+        else if ("DATABASE".equals(tipo)) {
+            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                return error("Nombre de base de datos inválido en BURN: " + nombre);
+            }
+            System.out.println("Comando BURN detectado sobre la base de datos: " + nombre);
+            return true;
+        }
+
+        return error("BURN debe ser seguido de DATABASE o TABLE.");
+    }  
 
     // ========== BRING ==========
     public Boolean comandoBring(List<String> tokens) {
-        int i = 0;
-        if (!"BRING".equals(tokens.get(i++))) return error("Falta BRING");
-
-        String nombreTabla = tokens.get(i++);
-        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
-            return error("Nombre de tabla inválido en BRING: " + nombreTabla);
-
-        if (!"{".equals(tokens.get(i++))) return error("Falta '{' en BRING");
-
-        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
-            String columna = tokens.get(i++);
-            if (!columna.matches("[A-Za-z_][A-Za-z0-9_()*]+")) {
-                return error("Columna inválida en BRING: " + columna);
-            }
-            if (",".equals(tokens.get(i))) {
-                i++;
-            }
+        if (tokens.size() != 3) {
+            return error("Sintaxis incorrecta en BRING. Uso correcto: BRING DATABASE <nombreDB> o BRING TABLE <nombreTabla>");
         }
 
-        if (i >= tokens.size() || !"}".equals(tokens.get(i++))) return error("Falta '}' en BRING");
+        String tipo = tokens.get(1);
+        String nombre = tokens.get(2);
 
-        while (i < tokens.size()) {
-            String token = tokens.get(i++);
-            switch (token) {
-                case "CONDITION":
-                case "CLUSTER":
-                case "ALIGN":
-                case "DECLINE":
-                case "CAP":
-                    System.out.println("Cláusula " + token + " detectada");
-                    break;
-                default:
-                    return error("Token inesperado en BRING: " + token);
+        if ("DATABASE".equals(tipo)) {
+            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                return error("Nombre de base de datos inválido en BRING: " + nombre);
+            }   
+            System.out.println("Comando BRING detectado sobre la base de datos: " + nombre);
+            return true;
+        } else if ("TABLE".equals(tipo)) {
+            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                return error("Nombre de tabla inválido en BRING: " + nombre);
             }
+            System.out.println("Comando BRING detectado sobre la tabla: " + nombre);
+            return true;
         }
 
-        System.out.println("Comando BRING válido sobre tabla: " + nombreTabla);
-        return true;
+        return error("BRING debe ser seguido de DATABASE o TABLE.");
     }
 
     // ========== ERROR ==========

@@ -1,21 +1,33 @@
 package mythqlserver;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.*;
+import java.util.function.Consumer;
 
 public class ClientHandler implements Runnable {
+    // Callback opcional para la UI
+    private Consumer<String> messageCallback;
     private Socket socket;
     private UserStore userStore;
     private Map<String, User> sesiones;
     private String tokenAsignado = null; // token actual del cliente
     private String token;
+    private GestorConsultas gc = new GestorConsultas(messageCallback);
 
-    private GestorConsultas gc = new GestorConsultas();
+    
 
+    // Constructor para modo consola (sin UI)
     public ClientHandler(Socket socket, UserStore userStore, Map<String, User> sesiones) {
+        this(socket, userStore, sesiones, null);
+    }
+
+    // Constructor para modo UI (con callback)
+    public ClientHandler(Socket socket, UserStore userStore, Map<String, User> sesiones, Consumer<String> callback) {
         this.socket = socket;
         this.userStore = userStore;
         this.sesiones = sesiones;
+        this.messageCallback = callback;
     }
 
     @Override
@@ -26,7 +38,8 @@ public class ClientHandler implements Runnable {
 
             String mensaje;
             while ((mensaje = in.readLine()) != null) {
-                System.out.println("Recibido: " + mensaje);
+                enviarMensaje("Recibido: " + mensaje);
+
                 String[] partes = mensaje.split(" ", 3);
                 if (partes.length < 1) {
                     out.println("ERROR formato invalido");
@@ -64,7 +77,7 @@ public class ClientHandler implements Runnable {
                 }
             }
         } catch (Exception e) {
-            System.err.println("Error en cliente: " + e.getMessage());
+            enviarMensaje("Error en cliente: " + e.getMessage());
         }
     }
 
@@ -86,7 +99,7 @@ public class ClientHandler implements Runnable {
             sesiones.put(token, user);
             tokenAsignado = token;
             out.println("OK " + token);
-            System.out.println("Usuario autenticado: " + username + " -> Token: " + token);
+            enviarMensaje("Usuario autenticado: " + username + " -> Token: " + token);
         }
     }
 
@@ -101,16 +114,25 @@ public class ClientHandler implements Runnable {
 
         String resultado = gc.procesarConsulta(consulta, user);
         out.println("RESULT " + resultado);
-        System.out.println("Consulta de " + user.getUsername() + ": " + consulta);
+        enviarMensaje("Consulta de " + user.getUsername() + ": " + consulta);
+        enviarMensaje(resultado);
     }
 
     private void manejarLogout(String token, PrintWriter out) {
         User removed = sesiones.remove(token);
         if (removed != null) {
             out.println("OK Logout correcto");
-            System.out.println("Usuario " + removed.getUsername() + " deslogueado (token " + token + ")");
+            enviarMensaje("Usuario " + removed.getUsername() + " deslogueado (token " + token + ")");
         } else {
             out.println("ERROR token no valido");
+        }
+    }
+
+    private void enviarMensaje(String msg) {
+        if (messageCallback != null) {
+            messageCallback.accept(msg);
+        } else {
+            System.out.println(msg);
         }
     }
 

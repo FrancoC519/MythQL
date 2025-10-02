@@ -8,7 +8,8 @@ import java.util.regex.Pattern;
 import java.util.function.Consumer;
 
 public class GestorConsultas {
-
+    
+    private final String dbPath = "Databases/";
     private Consumer<String> messageCallback;
 
     // Constructor para modo consola
@@ -55,15 +56,21 @@ public class GestorConsultas {
     }
 
     private String comandoUtilize(List<String> tokens, User user) {
-        if (tokens.size() != 2) {
-            return "ERROR: Sintaxis UTILIZE inválida. Uso: UTILIZE <nombreDB>";
-        }
-
-        String base = tokens.get(1);
-        user.setBaseActiva(base);
-        enviarMensaje("Base activa cambiada a: " + base);
-        return "OK: Base de datos activa = " + base;
+    if (tokens.size() != 2) {
+        return "ERROR: Sintaxis UTILIZE inválida. Uso: UTILIZE <nombreDB>";
     }
+
+    String base = tokens.get(1);
+    File dbFile = new File(dbPath + base + ".csv");
+
+    if (!dbFile.exists()) {
+        return "ERROR: La base de datos '" + base + "' no existe.";
+    }
+
+    user.setBaseActiva(base);
+    enviarMensaje("Base activa cambiada a: " + base);
+    return "OK: Base de datos activa = " + base;
+}
 
     private String comandoSummon(List<String> tokens, User user) {
         String msg;
@@ -74,33 +81,41 @@ public class GestorConsultas {
 
         CSVDatabaseManager db = new CSVDatabaseManager();
 
-        // SUMMON DATABASE
         if ("DATABASE".equals(tokens.get(1))) {
             String nombreDB = tokens.get(2);
             boolean exito = db.crearDatabase(nombreDB);
-            msg = exito ? "OK: Base de datos '" + nombreDB + "' creada."
-                               : "ERROR: No se pudo crear la base de datos.";
+            msg = exito
+                    ? "OK: Base de datos '" + nombreDB + "' creada."
+                    : "ERROR: No se pudo crear la base de datos.";
             enviarMensaje(msg);
             return msg;
         }
 
-        // SUMMON TABLE
         if ("TABLE".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) {
                 return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
             }
+
+            File dbFile = new File(dbPath + user.getBaseActiva() + ".csv");
+            if (!dbFile.exists()) {
+                return "ERROR: La base activa '" + user.getBaseActiva() + "' no existe.";
+            }
+
             String nombreTabla = tokens.get(2);
             List<String> atributos = new ArrayList<>();
             for (int i = 4; i < tokens.size(); i++) {
                 if ("}".equals(tokens.get(i))) break;
                 atributos.add(tokens.get(i));
             }
+
             boolean exito = db.crearTabla(user.getBaseActiva(), nombreTabla, atributos);
-            msg = exito ? "OK: Tabla '" + nombreTabla + "' creada en DB " + user.getBaseActiva()
-                               : "ERROR: No se pudo crear la tabla.";
+            msg = exito
+                    ? "OK: Tabla '" + nombreTabla + "' creada en DB " + user.getBaseActiva()
+                    : "ERROR: No se pudo crear la tabla.";
             enviarMensaje(msg);
             return msg;
         }
+
         msg = "ERROR: SUMMON debe ser DATABASE o TABLE.";
         enviarMensaje(msg);
         return msg;

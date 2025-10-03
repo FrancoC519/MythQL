@@ -1,43 +1,29 @@
 package mythqlserver;
-
 import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
+import java.util.regex.*;
 import java.util.function.Consumer;
 
 public class GestorConsultas {
-
     private final String dbPath = "Databases/";
     private Consumer<String> messageCallback;
 
-    public GestorConsultas() {
-        this.messageCallback = null;
-    }
-
-    public GestorConsultas(Consumer<String> callback) {
-        this.messageCallback = callback;
-    }
+    public GestorConsultas() { this.messageCallback = null; }
+    public GestorConsultas(Consumer<String> callback) { this.messageCallback = callback; }
 
     public String procesarConsulta(String consulta, User user) {
         List<String> tokens = tokenizar(consulta);
-        if (tokens.isEmpty()) {
-            return "ERROR: Consulta vacía.";
-        }
+        if (tokens.isEmpty()) return "ERROR: Consulta vacía.";
         String comando = tokens.get(0).toUpperCase();
         enviarMensaje("Comando recibido: " + comando);
         switch (comando) {
-            case "SUMMON":
-                return comandoSummon(tokens, user);
-            case "UTILIZE":
-                return comandoUtilize(tokens, user);
-            case "BRING":
-                return comandoBring(tokens, user);
-            case "BURN":
-                return comandoBurn(tokens, user);
-            default:
-                return "ERROR: Comando desconocido '" + comando + "'";
+            case "SUMMON":   return comandoSummon(tokens, user);
+            case "UTILIZE":  return comandoUtilize(tokens, user);
+            case "BRING":    return comandoBring(tokens, user);
+            case "BURN":     return comandoBurn(tokens, user);
+            case "MANIFEST": return comandoManifest(tokens, user);
+            case "DEPICT":   return comandoDepict(tokens, user);
+            default:         return "ERROR: Comando desconocido '" + comando + "'";
         }
     }
 
@@ -45,10 +31,32 @@ public class GestorConsultas {
         Pattern pattern = Pattern.compile("[A-Za-z0-9_]+|[{},(){}]");
         Matcher matcher = pattern.matcher(consulta);
         List<String> tokens = new ArrayList<>();
-        while (matcher.find()) {
-            tokens.add(matcher.group().toUpperCase());
-        }
+        while (matcher.find()) tokens.add(matcher.group().toUpperCase());
         return tokens;
+    }
+
+    // === MANIFEST ===
+    private String comandoManifest(List<String> tokens, User user) {
+        CSVDatabaseManager db = new CSVDatabaseManager();
+        if (tokens.size() != 2) return "ERROR: Uso: MANIFEST DATABASES | MANIFEST TABLES";
+        if ("DATABASES".equals(tokens.get(1))) {
+            List<String> bases = db.listarBases();
+            return bases.isEmpty() ? "No hay bases de datos." : "Bases: " + String.join(", ", bases);
+        } else if ("TABLES".equals(tokens.get(1))) {
+            if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
+            List<String> tablas = db.listarTablas(user.getBaseActiva());
+            return tablas.isEmpty() ? "No hay tablas en DB " + user.getBaseActiva()
+                                    : "Tablas en " + user.getBaseActiva() + ": " + String.join(", ", tablas);
+        }
+        return "ERROR: MANIFEST debe ser DATABASES o TABLES";
+    }
+
+    // === DEPICT ===
+    private String comandoDepict(List<String> tokens, User user) {
+        if (tokens.size() != 2) return "ERROR: Uso: DEPICT <tabla>";
+        if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
+        CSVDatabaseManager db = new CSVDatabaseManager();
+        return db.describirTabla(user.getBaseActiva(), tokens.get(1));
     }
 
     private String comandoUtilize(List<String> tokens, User user) {

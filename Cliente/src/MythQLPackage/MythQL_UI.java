@@ -407,7 +407,7 @@ public class MythQL_UI extends JFrame {
             StyleConstants.setForeground(normal, Color.BLACK);
             doc.setCharacterAttributes(0, doc.getLength(), normal, true);
 
-            List<String> keywords = Arrays.asList("SUMMON", "DATABASE", "TABLE", "BURN", "BRING", "UTILIZE", "LOGOUT");
+            List<String> keywords = Arrays.asList("SUMMON", "DATABASE", "TABLE", "BURN", "BRING", "UTILIZE", "LOGOUT","TABLES","INT","VARCHAR","MANIFEST","DATABASES","DEPICT","SELF","STACKABLE");
             String upperText = text.toUpperCase();
             
             for (String kw : keywords) {

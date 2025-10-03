@@ -37,8 +37,7 @@ public class MythQL_Login extends JDialog {
             String password = new String(txtPassword.getPassword());
 
             ClienteConexion conn = new ClienteConexion("localhost", 12345);
-            token = conn.login(username, password); // ✅ método login ahora existe
-
+            token = conn.login(username, password);
             if (token != null) {
                 JOptionPane.showMessageDialog(this,
                         "Inicio de sesión exitoso.\nUsuario: " + username,

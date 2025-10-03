@@ -193,7 +193,12 @@ public class MythQL_UI extends JFrame {
                 try {
                     ClienteConexion conexion = new ClienteConexion("localhost", 12345);
                     String respuestaServidor = conexion.enviarConsultaConToken(token, consulta);
-                    logMessage("Respuesta del servidor: " + respuestaServidor, Color.GREEN);
+                    logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
+                    if (respuestaServidor.startsWith("RESULT ERROR")) {
+                        logMessage(respuestaServidor, Color.RED);
+                    } else {
+                        logMessage(respuestaServidor, Color.GREEN);
+                    }
                 } catch (Exception ex) {
                     logError("Error al conectar con servidor: " + ex.getMessage());
                 }
@@ -221,6 +226,18 @@ public class MythQL_UI extends JFrame {
     private void logError(String errorMsg) {
         lastErrorMsg = errorMsg;
         logMessage(errorMsg, Color.RED);
+    }
+    
+    private void logMessageWithoutEnter(String message, Color color) {
+        StyledDocument doc = consolePane.getStyledDocument();
+        Style style = consolePane.addStyle("Style", null);
+        StyleConstants.setForeground(style, color);
+        try {
+            doc.insertString(doc.getLength(), message, style);
+            consolePane.setCaretPosition(doc.getLength());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // ------------------- Wizard -------------------

@@ -187,7 +187,7 @@ public class MythQL_UI extends JFrame {
             return;
         }
 
-        GestorSintaxis GS = new GestorSintaxis();
+        GestorSintaxis GS = new GestorSintaxis(this);
         try {
             if (GS.enviarConsulta(consulta)) {
                 try {
@@ -223,7 +223,7 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    private void logError(String errorMsg) {
+    public void logError(String errorMsg) {
         lastErrorMsg = errorMsg;
         logMessage(errorMsg, Color.RED);
     }

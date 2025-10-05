@@ -2,11 +2,13 @@ package mythqlserver;
 import java.io.*;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.regex.*;
 import java.util.stream.Collectors;
 
 public class CSVDatabaseManager {
     private final String dbPath = "Databases/";
 
+    // ===== CREAR BASE DE DATOS =====
     public boolean crearDatabase(String nombreDB) {
         try {
             File carpeta = new File(dbPath);
@@ -23,23 +25,45 @@ public class CSVDatabaseManager {
         }
     }
 
+    // ===== CREAR TABLA =====
     public boolean crearTabla(String dbName, String nombreTabla, List<String> atributos) {
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
-            try (FileWriter writer = new FileWriter(dbFile, true)) {
-                String linea = nombreTabla + ":" + String.join(" ", atributos);
-                writer.write(linea + System.lineSeparator());
+
+            List<String> lineas = Files.readAllLines(dbFile.toPath());
+            List<String> nuevasLineas = new ArrayList<>();
+            boolean selfBlockFound = false;
+
+            for (String linea : lineas) {
+                if (linea.trim().toUpperCase().startsWith("SELFSTACKABLES:")) {
+                    selfBlockFound = true;
+                    // Insertamos la nueva tabla justo antes de SELFSTACKABLES
+                    nuevasLineas.add(nombreTabla + ":" + String.join(" ", atributos));
+                }
+                nuevasLineas.add(linea);
             }
+
+            if (!selfBlockFound) {
+                // No había SELFSTACKABLES, agregamos la tabla al final
+                nuevasLineas.add(nombreTabla + ":" + String.join(" ", atributos));
+            }
+
+            Files.write(dbFile.toPath(), nuevasLineas);
+
+            // Crear archivo físico de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + nombreTabla + ".csv");
             if (tablaFile.exists()) return false;
             return tablaFile.createNewFile();
+
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
     }
 
+
+    // ===== ELIMINAR DB / TABLA =====
     public boolean eliminarDatabase(String dbName) {
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
@@ -61,21 +85,70 @@ public class CSVDatabaseManager {
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
+
+            List<String> lineas = Files.readAllLines(dbFile.toPath());
+            List<String> tablaLines = new ArrayList<>();
+            Map<String, Integer> counters = new HashMap<>();
+            boolean selfBlockStarted = false;
+
+            // Separar tablas y SELFSTACKABLES
+            for (String linea : lineas) {
+                String trimmed = linea.trim();
+                if (trimmed.isEmpty()) continue;
+
+                if (trimmed.toUpperCase().startsWith("SELFSTACKABLES:")) {
+                    selfBlockStarted = true;
+                    continue;
+                }
+
+                if (selfBlockStarted) {
+                    if (trimmed.contains("=")) {
+                        String[] partes = trimmed.split("=");
+                        counters.put(partes[0].trim().toUpperCase(), Integer.parseInt(partes[1].trim()));
+                    }
+                } else {
+                    tablaLines.add(linea);
+                }
+            }
+
+            // Filtrar la tabla a eliminar
+            tablaLines = tablaLines.stream()
+                    .filter(l -> !l.toUpperCase().startsWith(nombreTabla.toUpperCase() + ":"))
+                    .collect(Collectors.toList());
+
+            // Filtrar SELFSTACKABLES de esa tabla
+            String tablaUpper = nombreTabla.toUpperCase() + ".";
+            Map<String, Integer> nuevosCounters = new HashMap<>();
+            for (Map.Entry<String, Integer> e : counters.entrySet()) {
+                if (!e.getKey().startsWith(tablaUpper)) {
+                    nuevosCounters.put(e.getKey(), e.getValue());
+                }
+            }
+
+            // Reescribir archivo
+            List<String> nuevasLineas = new ArrayList<>();
+            nuevasLineas.addAll(tablaLines);
+            nuevasLineas.add("SELFSTACKABLES:");
+            for (Map.Entry<String, Integer> e : nuevosCounters.entrySet()) {
+                nuevasLineas.add(e.getKey() + " = " + e.getValue());
+            }
+
+            Files.write(dbFile.toPath(), nuevasLineas);
+
+            // Eliminar el archivo de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + nombreTabla + ".csv");
             if (tablaFile.exists()) tablaFile.delete();
-            List<String> lineas = Files.readAllLines(dbFile.toPath());
-            List<String> nuevasLineas = lineas.stream()
-                    .filter(l -> !l.startsWith(nombreTabla + ":"))
-                    .collect(Collectors.toList());
-            Files.write(dbFile.toPath(), nuevasLineas);
+
             return true;
+
         } catch (IOException e) {
             e.printStackTrace();
             return false;
         }
     }
 
-    // ======= NUEVO: listar bases =======
+
+    // ===== LISTADOS =====
     public List<String> listarBases() {
         File carpeta = new File(dbPath);
         if (!carpeta.exists()) return new ArrayList<>();
@@ -84,12 +157,12 @@ public class CSVDatabaseManager {
                 .collect(Collectors.toList());
     }
 
-    // ======= NUEVO: listar tablas =======
     public List<String> listarTablas(String dbName) {
         File dbFile = new File(dbPath + dbName + ".csv");
         if (!dbFile.exists()) return new ArrayList<>();
         try {
             return Files.readAllLines(dbFile.toPath()).stream()
+                    .filter(l -> l.contains(":") && !l.startsWith("SELFSTACKABLES"))
                     .map(l -> l.split(":")[0])
                     .collect(Collectors.toList());
         } catch (IOException e) {
@@ -97,7 +170,6 @@ public class CSVDatabaseManager {
         }
     }
 
-    // ======= NUEVO: describir tabla =======
     public String describirTabla(String dbName, String tabla) {
         File dbFile = new File(dbPath + dbName + ".csv");
         if (!dbFile.exists()) return "ERROR: Base no existe";
@@ -112,4 +184,156 @@ public class CSVDatabaseManager {
             return "ERROR: No se pudo leer DB.";
         }
     }
+
+    // ===== INSERTAR REGISTROS =====
+    public boolean insertarRegistros(String dbName, String tableName, List<String> columnas, List<List<String>> registros) {
+        try {
+            File dbMeta = new File(dbPath + dbName + ".csv");
+            if (!dbMeta.exists()) return false;
+
+            List<String> lineas = Files.readAllLines(dbMeta.toPath());
+            Map<String, Integer> counters = new HashMap<>();
+            List<String> tablaLines = new ArrayList<>();
+
+            // --- Separar tablas y SELFSTACKABLES ---
+            boolean selfBlockStarted = false;
+            for (String linea : lineas) {
+                String trimmed = linea.trim();
+                if (trimmed.isEmpty()) continue;
+
+                if (trimmed.toUpperCase().startsWith("SELFSTACKABLES:")) {
+                    selfBlockStarted = true;
+                    continue;
+                }
+
+                if (selfBlockStarted) {
+                    if (trimmed.contains("=")) {
+                        String[] partes = trimmed.split("=");
+                        counters.put(partes[0].trim().toUpperCase(), Integer.parseInt(partes[1].trim()));
+                    }
+                } else {
+                    tablaLines.add(linea);
+                }
+            }
+
+            // --- Buscar definición de la tabla ---
+            String definicion = null;
+            for (String linea : tablaLines) {
+                if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                    definicion = linea.substring(linea.indexOf(":") + 1).trim();
+                    break;
+                }
+            }
+            if (definicion == null) return false;
+
+            // --- Parsear definición ---
+            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?", Pattern.CASE_INSENSITIVE);
+            Matcher m = defPat.matcher(definicion);
+
+            List<String> nombres = new ArrayList<>();
+            List<String> tipos = new ArrayList<>();
+            List<Integer> longitudes = new ArrayList<>();
+            List<Boolean> autoInc = new ArrayList<>();
+
+            while (m.find()) {
+                nombres.add(m.group(1).toUpperCase());
+                tipos.add(m.group(2).toUpperCase());
+                longitudes.add(m.group(4) != null ? Integer.parseInt(m.group(4)) : null);
+                autoInc.add(m.group(5) != null);
+            }
+
+            // --- Validar tipos antes de insertar ---
+            for (List<String> registro : registros) {
+                if (registro.size() != columnas.size()) return false;
+
+                for (int i = 0; i < columnas.size(); i++) {
+                    String col = columnas.get(i).toUpperCase();
+                    int idx = nombres.indexOf(col);
+                    if (idx == -1) continue;
+
+                    String tipo = tipos.get(idx);
+                    Integer maxLen = longitudes.get(idx);
+                    String valor = registro.get(i);
+
+                    if (tipo.equals("INT")) {
+                        if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+")) {
+                            System.err.println("ERROR: Valor no entero en columna " + col);
+                            return false;
+                        }
+                    } else if (tipo.equals("VARCHAR")) {
+                        if (!valor.startsWith("\"") || !valor.endsWith("\"")) {
+                            System.err.println("ERROR: VARCHAR sin comillas en columna " + col);
+                            return false;
+                        }
+                        String contenido = valor.substring(1, valor.length() - 1);
+                        if (maxLen != null && contenido.length() > maxLen) {
+                            System.err.println("ERROR: VARCHAR demasiado largo en columna " + col);
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            // --- Escribir en tabla ---
+            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+            if (!tablaFile.exists()) return false;
+
+            try (FileWriter fw = new FileWriter(tablaFile, true)) {
+                for (List<String> registro : registros) {
+                    Map<String, String> valorPorColumna = new HashMap<>();
+                    for (int c = 0; c < columnas.size(); c++) {
+                        valorPorColumna.put(columnas.get(c).toUpperCase(), registro.get(c));
+                    }
+
+                    StringBuilder sb = new StringBuilder();
+                    for (int j = 0; j < nombres.size(); j++) {
+                        String col = nombres.get(j);
+                        String valor = valorPorColumna.get(col);
+
+                        if (valor == null) {
+                            if (autoInc.get(j)) {
+                                String key = tableName.toUpperCase() + "." + col;
+                                int val = counters.getOrDefault(key, 0) + 1;
+                                counters.put(key, val);
+                                valor = String.valueOf(val);
+                            } else {
+                                valor = "NULL";
+                            }
+                        }
+                        sb.append(valor);
+                        if (j < nombres.size() - 1) sb.append(",");
+                    }
+                    fw.write(sb.toString() + System.lineSeparator());
+                }
+            }
+
+            // --- Reescribir archivo DB: todas las tablas + SELFSTACKABLES al final ---
+            List<String> nuevasLineas = new ArrayList<>();
+
+            // Agregar todas las líneas de tablas (antes de cualquier bloque SELFSTACKABLES)
+            for (String linea : tablaLines) {
+                if (!linea.trim().isEmpty()) {
+                    nuevasLineas.add(linea);
+                }
+            }
+
+            // Agregar el bloque SELFSTACKABLES al final
+            nuevasLineas.add("SELFSTACKABLES:");
+            for (Map.Entry<String, Integer> e : counters.entrySet()) {
+                nuevasLineas.add(e.getKey() + " = " + e.getValue());
+            }
+
+            // Escribir de nuevo en el archivo
+            Files.write(dbMeta.toPath(), nuevasLineas);
+
+
+            return true;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
 }

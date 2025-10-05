@@ -5,21 +5,24 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GestorSintaxis {
+    MythQL_UI UI;
+    public GestorSintaxis(MythQL_UI MQLUI) {
+        this.UI = MQLUI;
+    }
     
-    public Boolean enviarConsulta(String consulta){
-        Pattern pattern = Pattern.compile("[A-Za-z0-9_]+|[{},(){}]");
-        Matcher matcher = pattern.matcher(consulta);
-        List<String> tokens = new ArrayList<>();
-        
-        while (matcher.find()) {
-            String token = matcher.group();
-            tokens.add(token.toUpperCase());
-            System.out.println("TOKEN: " + token);
-        }
-        
-        if (tokens.isEmpty()) return false;
+    public Boolean enviarConsulta(String consulta) {
+        List<String> tokens = tokenizar(consulta);
 
-        String comando = tokens.get(0);
+        if (tokens.isEmpty()) {
+            System.out.println("No se detectaron tokens válidos.");
+            return false;
+        }
+
+        System.out.println("TOKENS DETECTADOS:");
+        for (String t : tokens) System.out.println("TOKEN: " + t);
+
+        String comando = tokens.get(0).toUpperCase();
+
         switch (comando) {
             case "SUMMON":   return comandoSummon(tokens);
             case "BURN":     return comandoBurn(tokens);
@@ -28,10 +31,36 @@ public class GestorSintaxis {
             case "LOGOUT":   return comandoLOGOUT(tokens);
             case "MANIFEST": return comandoManifest(tokens);
             case "DEPICT":   return comandoDepict(tokens);
+            case "FILE":     return comandoFile(tokens);
             default:
                 System.out.println("Comando desconocido: " + comando);
                 return false;
         }
+    }
+    // ========== TOKENIZADOR NUEVO ==========
+    private List<String> tokenizar(String consulta) {
+        List<String> tokens = new ArrayList<>();
+
+        // RegEx que captura:
+        // - cadenas entre comillas simples o dobles
+        // - números (enteros o decimales)
+        // - palabras (identificadores)
+        // - signos especiales individuales: { } [ ] ( ) , ;
+        Pattern pattern = Pattern.compile(
+            "'[^']*'|\"[^\"]*\"|\\d+\\.\\d+|\\d+|[A-Za-z_][A-Za-z0-9_]*|[{}\\[\\](),;]"
+        );
+        Matcher matcher = pattern.matcher(consulta);
+
+        while (matcher.find()) {
+            String token = matcher.group();
+            // Mantener los valores literales tal como están (sin upper)
+            if (token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                tokens.add(token.toUpperCase());
+            } else {
+                tokens.add(token);
+            }
+        }
+        return tokens;
     }
 
     // ========== UTILIZE ==========
@@ -57,6 +86,7 @@ public class GestorSintaxis {
         if (tokens.size() < 3) {
             return error("Sintaxis incompleta en SUMMON");
         }
+
         if ("DATABASE".equals(tokens.get(1))) {
             if (tokens.size() != 3) return error("Uso: SUMMON DATABASE <nombreDB>");
             String nombreDB = tokens.get(2);
@@ -65,6 +95,7 @@ public class GestorSintaxis {
             System.out.println("Comando SUMMON DATABASE detectado: " + nombreDB);
             return true;
         }
+
         if ("TABLE".equals(tokens.get(1))) {
             int i = 2;
             String nombreTabla = tokens.get(i++);
@@ -102,6 +133,7 @@ public class GestorSintaxis {
             }
             return error("Falta '}' de cierre en SUMMON");
         }
+
         return error("Se esperaba DATABASE o TABLE después de SUMMON");
     }
 
@@ -122,7 +154,7 @@ public class GestorSintaxis {
             return true;
         }
         return error("BURN debe ser seguido de DATABASE o TABLE.");
-    }  
+    }
 
     // ========== BRING ==========
     public Boolean comandoBring(List<String> tokens) {
@@ -166,10 +198,56 @@ public class GestorSintaxis {
         System.out.println("Comando DEPICT sobre la tabla: " + nombreTabla);
         return true;
     }
+    
+    // ========== FILE ==========
+    public Boolean comandoFile(List<String> tokens) {
+        if (tokens.size() < 4)
+            return error("Sintaxis FILE incompleta. Uso: FILE <tabla>{<columnas>} [<valores>], ...");
+
+        int i = 1;
+        String nombreTabla = tokens.get(i++);
+        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido: " + nombreTabla);
+
+        if (!"{".equals(tokens.get(i++))) return error("Falta '{' tras el nombre de la tabla.");
+
+        List<String> columnas = new ArrayList<>();
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String col = tokens.get(i++);
+            if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
+                return error("Nombre de columna inválido: " + col);
+            columnas.add(col);
+            if (",".equals(tokens.get(i))) i++;
+        }
+        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
+            return error("Falta '}' de cierre en las columnas.");
+
+        if (i >= tokens.size()) return error("Faltan registros entre corchetes [ ].");
+
+        while (i < tokens.size()) {
+            if (!"[".equals(tokens.get(i++))) return error("Se esperaba '[' para abrir un registro.");
+            List<String> valores = new ArrayList<>();
+            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                String val = tokens.get(i++);
+                valores.add(val);
+                if (",".equals(tokens.get(i))) i++;
+            }
+            if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
+                return error("Falta ']' de cierre en un registro.");
+            if (valores.size() > columnas.size())
+                return error("Demasiados valores en un registro.");
+            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+        }
+
+        System.out.println("Comando FILE válido sobre tabla " + nombreTabla + " con columnas " + columnas);
+        return true;
+    }
 
     // ========== ERROR ==========
     private boolean error(String msg) {
+        UI.logError("Error de sintaxis:" + msg);
         System.out.println("Error de sintaxis: " + msg);
+        
         return false;
     }
 }

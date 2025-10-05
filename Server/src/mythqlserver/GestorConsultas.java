@@ -23,17 +23,24 @@ public class GestorConsultas {
             case "BURN":     return comandoBurn(tokens, user);
             case "MANIFEST": return comandoManifest(tokens, user);
             case "DEPICT":   return comandoDepict(tokens, user);
+            case "FILE":     return comandoFile(tokens, user);
             default:         return "ERROR: Comando desconocido '" + comando + "'";
         }
     }
 
     private List<String> tokenizar(String consulta) {
-        Pattern pattern = Pattern.compile("[A-Za-z0-9_]+|[{},(){}]");
+        Pattern pattern = Pattern.compile("\"[^\"]*\"|[A-Za-z0-9_]+|[{}(),\\[\\]]");
         Matcher matcher = pattern.matcher(consulta);
         List<String> tokens = new ArrayList<>();
-        while (matcher.find()) tokens.add(matcher.group().toUpperCase());
+        while (matcher.find()) {
+            String tok = matcher.group();
+            // solo mayúsculas en identificadores, no en strings
+            if (!tok.startsWith("\"")) tok = tok.toUpperCase();
+            tokens.add(tok);
+        }
         return tokens;
     }
+
 
     // === MANIFEST ===
     private String comandoManifest(List<String> tokens, User user) {
@@ -177,6 +184,51 @@ public class GestorConsultas {
         }
         return "ERROR: BURN debe ser DATABASE o TABLE.";
     }
+    
+    private String comandoFile(List<String> tokens, User user) {
+        if (user.getBaseActiva() == null)
+            return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
+
+        if (tokens.size() < 4)
+            return "ERROR: Sintaxis FILE incompleta.";
+
+        int i = 1;
+        String tabla = tokens.get(i++);
+        if (!new File("Databases/" + user.getBaseActiva() + "_tables/" + tabla + ".csv").exists())
+            return "ERROR: La tabla '" + tabla + "' no existe en la base activa.";
+
+        if (!"{".equals(tokens.get(i++)))
+            return "ERROR: Falta '{' tras el nombre de tabla.";
+
+        List<String> columnas = new ArrayList<>();
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            columnas.add(tokens.get(i++));
+            if (",".equals(tokens.get(i))) i++;
+        }
+        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
+            return "ERROR: Falta '}' en lista de columnas.";
+
+        List<List<String>> registros = new ArrayList<>();
+
+        while (i < tokens.size()) {
+            if (!"[".equals(tokens.get(i++))) return "ERROR: Falta '[' en registro.";
+            List<String> valores = new ArrayList<>();
+            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                valores.add(tokens.get(i++));
+                if (",".equals(tokens.get(i))) i++;
+            }
+            if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
+                return "ERROR: Falta ']' de cierre.";
+            registros.add(valores);
+            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+        }
+
+        CSVDatabaseManager db = new CSVDatabaseManager();
+        boolean ok = db.insertarRegistros(user.getBaseActiva(), tabla, columnas, registros);
+        return ok ? "OK: Registros insertados en " + tabla
+                  : "ERROR: Fallo al insertar registros en " + tabla;
+    }
+
 
     private void enviarMensaje(String msg) {
         if (messageCallback != null) {

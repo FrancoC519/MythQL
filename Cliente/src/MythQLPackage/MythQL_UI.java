@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.io.File;
 import java.net.URISyntaxException;
 import java.awt.Desktop;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javax.swing.Timer;
@@ -187,28 +188,78 @@ public class MythQL_UI extends JFrame {
             return;
         }
 
-        GestorSintaxis GS = new GestorSintaxis(this);
-        try {
-            if (GS.enviarConsulta(consulta)) {
-                try {
-                    ClienteConexion conexion = new ClienteConexion("localhost", 12345);
-                    String respuestaServidor = conexion.enviarConsultaConToken(token, consulta);
-                    logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
-                    if (respuestaServidor.startsWith("RESULT ERROR")) {
-                        logMessage(respuestaServidor, Color.RED);
-                    } else {
-                        logMessage(respuestaServidor, Color.GREEN);
+        // --- Separar comandos por ';' pero sin romper si hay comillas ---
+        List<String> comandos = dividirPorPuntoYComa(consulta);
+
+        for (String comando : comandos) {
+            comando = comando.trim();
+            if (comando.isEmpty()) continue; // ignorar vacíos
+
+            GestorSintaxis GS = new GestorSintaxis(this);
+            try {
+                if (GS.enviarConsulta(comando)) {
+                    try {
+                        ClienteConexion conexion = new ClienteConexion("localhost", 12345);
+                        String respuestaServidor = conexion.enviarConsultaConToken(token, comando);
+
+                        logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
+                        if (respuestaServidor.startsWith("RESULT ERROR")) {
+                            logMessage(respuestaServidor, Color.RED);
+                        } else {
+                            logMessage(respuestaServidor, Color.GREEN);
+                        }
+
+                        // Esperar un poquito entre comandos para claridad (opcional)
+                        Thread.sleep(150);
+
+                    } catch (Exception ex) {
+                        logError("Error al conectar con servidor: " + ex.getMessage());
+                        break; // detener ejecución
                     }
-                } catch (Exception ex) {
-                    logError("Error al conectar con servidor: " + ex.getMessage());
+                } else {
+                    logError("ERROR de sintaxis: " + comando);
+                    break; // detener ejecución
                 }
-            } else {
-                logError("ERROR de sintaxis: consulta no enviada.");
+            } catch (Exception e) {
+                logError("ERROR inesperado: " + e.getMessage());
+                break;
             }
-        } catch (Exception e) {
-            logError("ERROR inesperado: " + e.getMessage());
         }
     }
+    
+    // --- Divide un texto en comandos separados por ';' ignorando los que estén dentro de comillas ---
+    private List<String> dividirPorPuntoYComa(String texto) {
+        List<String> comandos = new ArrayList<>();
+        StringBuilder actual = new StringBuilder();
+        boolean dentroComillasSimples = false;
+        boolean dentroComillasDobles = false;
+
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+
+            if (c == '\'' && !dentroComillasDobles) {
+                dentroComillasSimples = !dentroComillasSimples;
+            } else if (c == '"' && !dentroComillasSimples) {
+                dentroComillasDobles = !dentroComillasDobles;
+            }
+
+            if (c == ';' && !dentroComillasSimples && !dentroComillasDobles) {
+                comandos.add(actual.toString());
+                actual.setLength(0);
+            } else {
+                actual.append(c);
+            }
+        }
+
+        // último comando (si no terminó en ;)
+        if (actual.length() > 0) {
+            comandos.add(actual.toString());
+        }
+
+        return comandos;
+    }
+
+
 
     // ------------------- Consola -------------------
     private void logMessage(String message, Color color) {

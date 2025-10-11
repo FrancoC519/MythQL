@@ -40,12 +40,6 @@ public class GestorSintaxis {
     // ========== TOKENIZADOR NUEVO ==========
     private List<String> tokenizar(String consulta) {
         List<String> tokens = new ArrayList<>();
-
-        // RegEx que captura:
-        // - cadenas entre comillas simples o dobles
-        // - números (enteros o decimales)
-        // - palabras (identificadores)
-        // - signos especiales individuales: { } [ ] ( ) , ;
         Pattern pattern = Pattern.compile(
             "'[^']*'|\"[^\"]*\"|\\d+\\.\\d+|\\d+|[A-Za-z_][A-Za-z0-9_]*|[{}\\[\\](),;]"
         );
@@ -158,21 +152,38 @@ public class GestorSintaxis {
 
     // ========== BRING ==========
     public Boolean comandoBring(List<String> tokens) {
-        if (tokens.size() != 3) {
-            return error("Sintaxis incorrecta en BRING. Uso: BRING DATABASE <db> o BRING TABLE <table>");
-        }
-        String tipo = tokens.get(1);
-        String nombre = tokens.get(2);
-        if ("DATABASE".equals(tipo)) {
-            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) return error("Nombre DB inválido");
-            System.out.println("Comando BRING DATABASE: " + nombre);
-            return true;
-        } else if ("TABLE".equals(tipo)) {
-            if (!nombre.matches("[A-Za-z_][A-Za-z0-9_]*")) return error("Nombre tabla inválido");
-            System.out.println("Comando BRING TABLE: " + nombre);
+        if (tokens.size() < 2)
+            return error("Sintaxis incorrecta. Uso: BRING <tabla> [ { columnas } ]");
+
+        String nombreTabla = tokens.get(1);
+        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido: " + nombreTabla);
+
+        // Solo BRING <tabla>
+        if (tokens.size() == 2) {
+            System.out.println("Comando BRING completo: " + nombreTabla + " (todas las columnas)");
             return true;
         }
-        return error("BRING debe ser seguido de DATABASE o TABLE.");
+
+        // BRING <tabla> { col1, col2 }
+        int i = 2;
+        if (!"{".equals(tokens.get(i++)))
+            return error("Se esperaba '{' tras el nombre de la tabla.");
+
+        List<String> columnas = new ArrayList<>();
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String col = tokens.get(i++);
+            if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
+                return error("Nombre de columna inválido: " + col);
+            columnas.add(col);
+            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i)))
+            return error("Falta '}' de cierre en la selección de columnas.");
+
+        System.out.println("Comando BRING con columnas: " + nombreTabla + " → " + columnas);
+        return true;
     }
 
     // ========== MANIFEST ==========

@@ -121,37 +121,117 @@ public class GestorConsultas {
     }
 
     private String comandoBring(List<String> tokens, User user) {
-        String msg;
-        if (tokens.size() < 2) {
-            return "ERROR: Sintaxis BRING inválida.";
-        }
-        // BRING DATABASE <db>
-        if ("DATABASE".equals(tokens.get(1)) && tokens.size() == 3) {
-            String dbName = tokens.get(2);
+        if (tokens.size() < 2)
+            return "ERROR: Sintaxis BRING inválida. Uso: BRING <tabla> [ { columnas } ]";
+        if (user.getBaseActiva() == null)
+            return "ERROR: No hay base activa.";
+
+        String dbName = user.getBaseActiva();
+        String tableName = tokens.get(1);
+        File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+        if (!tablaFile.exists())
+            return "ERROR: Tabla '" + tableName + "' no encontrada.";
+
+        try {
+            // === Leer definición desde el archivo de la DB ===
             File dbFile = new File(dbPath + dbName + ".csv");
-            msg = dbFile.exists()
-                    ? "OK: Base de datos '" + dbName + "' está disponible."
-                    : "ERROR: Base de datos '" + dbName + "' no existe.";
-            enviarMensaje(msg);
-            return msg;
-        }
-        // BRING TABLE <table>
-        if ("TABLE".equals(tokens.get(1)) && tokens.size() == 3) {
-            if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
-            String tableName = tokens.get(2);
-            File tablaFile = new File(dbPath + user.getBaseActiva() + "_tables/" + tableName + ".csv");
-            msg = tablaFile.exists()
-                    ? "OK: Tabla '" + tableName + "' existe en DB '" + user.getBaseActiva() + "'."
-                    : "ERROR: Tabla '" + tableName + "' no encontrada en DB '" + user.getBaseActiva() + "'.";
-            enviarMensaje(msg);
-            return msg;
-        }
+            if (!dbFile.exists())
+                return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
 
-        msg = "ERROR: Sintaxis BRING inválida.";
-        enviarMensaje(msg);
-        return msg;
+            List<String> dbLines = java.nio.file.Files.readAllLines(dbFile.toPath());
+            String definicion = null;
+            for (String linea : dbLines) {
+                if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                    definicion = linea.substring(linea.indexOf(":") + 1).trim();
+                    break;
+                }
+            }
+            if (definicion == null)
+                return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
+
+            // === Extraer nombres de columnas de la definición ===
+            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
+            Matcher m = defPat.matcher(definicion);
+            List<String> nombresColumnas = new ArrayList<>();
+            while (m.find()) {
+                nombresColumnas.add(m.group(1).toUpperCase());
+            }
+            if (nombresColumnas.isEmpty())
+                return "ERROR: No se pudieron extraer las columnas de la definición.";
+
+            // === Si se especifican columnas dentro de { } ===
+            List<String> columnasFiltradas = new ArrayList<>();
+            if (tokens.size() > 2 && "{".equals(tokens.get(2))) {
+                int i = 3;
+                while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+                    String col = tokens.get(i++);
+                    columnasFiltradas.add(col.toUpperCase());
+                    if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+                }
+            }
+
+            boolean hayFiltro = !columnasFiltradas.isEmpty();
+            List<Integer> indices = new ArrayList<>();
+
+            if (hayFiltro) {
+                for (String c : columnasFiltradas) {
+                    int idx = nombresColumnas.indexOf(c);
+                    if (idx != -1) indices.add(idx);
+                }
+                if (indices.isEmpty())
+                    return "ERROR: Ninguna de las columnas especificadas existe en la tabla.";
+            } else {
+                for (int i = 0; i < nombresColumnas.size(); i++)
+                    indices.add(i);
+            }
+
+            // === Leer los registros del archivo de la tabla ===
+            List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
+            if (lineas.isEmpty()) {
+                enviarMensaje("(tabla vacía)");
+                return "(tabla vacía)";
+            }
+
+            // === Construir salida: encabezado + registros ===
+            StringBuilder sb = new StringBuilder();
+
+            // Encabezado de tabla
+            String header1 = "Tabla: " + tableName.toUpperCase() + " ";
+            String header2 = String.join(" | ", indices.stream().map(nombresColumnas::get).toList());
+            
+            
+            enviarMensaje(header1);
+            enviarMensaje(header2);
+            enviarMensaje("||");
+
+            sb.append(header1).append("");
+            sb.append(header2).append("");
+            sb.append("||");
+
+            // Registros
+            for (String linea : lineas) {
+                String[] valores = linea.split(",", -1);
+                List<String> seleccionados = new ArrayList<>();
+                for (int idx : indices) {
+                    if (idx < valores.length)
+                        seleccionados.add(valores[idx]);
+                    else
+                        seleccionados.add("NULL");
+                }
+                String fila = String.join(" | ", seleccionados);
+                enviarMensaje(fila);
+                sb.append(fila).append("\\");
+            }
+            
+            return sb.toString();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            enviarMensaje("ERROR: No se pudo leer la tabla.");
+            return "ERROR: No se pudo leer la tabla '" + tableName + "'.";
+        }
     }
-
+    
     private String comandoBurn(List<String> tokens, User user) {
         if (tokens.size() < 3) {
             String msg = "ERROR: Sintaxis BURN inválida.";

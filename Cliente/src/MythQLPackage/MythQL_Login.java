@@ -7,15 +7,28 @@ public class MythQL_Login extends JDialog {
     private JTextField txtUsername;
     private JPasswordField txtPassword;
     private String token = null;
+    private String host;
+    private int port;
 
-    public MythQL_Login(Frame parent) {
+    // Constructor modificado para aceptar host y port
+    public MythQL_Login(Frame parent, String host, int port) {
         super(parent, "Login - MYTHQL", true);
+        this.host = host;
+        this.port = port;
+        
         setSize(300, 200);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
-        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+        JPanel panel = new JPanel(new GridLayout(4, 2, 10, 10)); // Una fila más para info de conexión
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Información de conexión (solo lectura)
+        panel.add(new JLabel("Servidor:"));
+        JTextField txtServerInfo = new JTextField(host + ":" + port);
+        txtServerInfo.setEditable(false);
+        txtServerInfo.setBackground(new Color(240, 240, 240));
+        panel.add(txtServerInfo);
 
         panel.add(new JLabel("Usuario:"));
         txtUsername = new JTextField();
@@ -36,7 +49,8 @@ public class MythQL_Login extends JDialog {
             String username = txtUsername.getText().trim();
             String password = new String(txtPassword.getPassword());
 
-            ClienteConexion conn = new ClienteConexion("localhost", 12345);
+            // Usar el host y port configurados
+            ClienteConexion conn = new ClienteConexion(host, port);
             token = conn.login(username, password);
             if (token != null) {
                 JOptionPane.showMessageDialog(this,

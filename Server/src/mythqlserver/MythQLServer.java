@@ -6,27 +6,28 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MythQLServer {
 
-    private static final int PORT = 12345;
-
+    private int port; // Ya no es final
     private UserStore userStore = new UserStore();
     private Map<String, User> sesiones = new ConcurrentHashMap<>();
-
-    // UI opcional
     private MythQLServerUI serverUI;
+    private ServerSocket serverSocket;
 
-    // Constructor sin UI (modo consola)
-    public MythQLServer() {
+    // Constructor sin UI (modo consola) - ahora recibe puerto
+    public MythQLServer(int port) {
+        this.port = port;
         this.serverUI = null;
     }
 
-    // Constructor con UI
-    public MythQLServer(MythQLServerUI ui) {
+    // Constructor con UI - ahora recibe puerto
+    public MythQLServer(MythQLServerUI ui, int port) {
         this.serverUI = ui;
+        this.port = port;
     }
 
     public void start() {
-        try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            log("Servidor escuchando en puerto " + PORT, java.awt.Color.GREEN);
+        try {
+            serverSocket = new ServerSocket(port);
+            log("Servidor escuchando en puerto " + port, java.awt.Color.GREEN);
 
             while (true) {
                 Socket socket = serverSocket.accept();
@@ -34,18 +35,29 @@ public class MythQLServer {
 
                 ClientHandler handler;
                 if (serverUI != null) {
-                    // con UI: pasamos la función de log
                     handler = new ClientHandler(socket, userStore, sesiones, serverUI::logMessage);
                 } else {
-                    // sin UI: logs por consola
                     handler = new ClientHandler(socket, userStore, sesiones);
                 }
 
                 new Thread(handler).start();
             }
         } catch (Exception e) {
-            log("Error en servidor: " + e.getMessage(), java.awt.Color.RED);
-            e.printStackTrace();
+            if (!e.getMessage().contains("socket closed")) {
+                log("Error en servidor: " + e.getMessage(), java.awt.Color.RED);
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void stop() {
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+                log("Servidor detenido", java.awt.Color.YELLOW);
+            }
+        } catch (Exception e) {
+            log("Error al detener servidor: " + e.getMessage(), java.awt.Color.RED);
         }
     }
 
@@ -58,20 +70,50 @@ public class MythQLServer {
         }
     }
 
-    // Método main flexible: se puede lanzar con o sin UI
+    // Método main flexible modificado
     public static void main(String[] args) {
-        boolean usarUI = true; // ponelo en false si querés que arranque solo en consola
+        boolean usarUI = true;
 
         if (usarUI) {
             javax.swing.SwingUtilities.invokeLater(() -> {
-                MythQLServerUI ui = new MythQLServerUI();
+                // Mostrar diálogo de configuración primero
+                ServerConfigDialog configDialog = new ServerConfigDialog(null);
+                configDialog.setVisible(true);
+
+                if (!configDialog.isStarted()) {
+                    System.out.println("Inicio del servidor cancelado por el usuario.");
+                    System.exit(0);
+                    return;
+                }
+
+                int port = configDialog.getPort();
+                
+                // Ahora crear la UI principal del servidor
+                MythQLServerUI ui = new MythQLServerUI(port);
                 ui.setVisible(true);
 
-                MythQLServer server = new MythQLServer(ui);
-                new Thread(server::start).start();
+                // Pasar el puerto seleccionado al servidor
+                MythQLServer server = new MythQLServer(ui, port);
+                
+                // Iniciar servidor en hilo separado
+                Thread serverThread = new Thread(server::start);
+                serverThread.start();
+                
+                // Configurar el servidor en la UI para poder detenerlo
+                ui.setServer(server);
             });
         } else {
-            new MythQLServer().start();
+            // Modo consola - usar puerto por defecto o argumento
+            int port = 12345;
+            if (args.length > 0) {
+                try {
+                    port = Integer.parseInt(args[0]);
+                } catch (NumberFormatException e) {
+                    System.out.println("Puerto inválido. Usando puerto por defecto: 12345");
+                }
+            }
+            System.out.println("Iniciando servidor en modo consola, puerto: " + port);
+            new MythQLServer(port).start();
         }
     }
 }

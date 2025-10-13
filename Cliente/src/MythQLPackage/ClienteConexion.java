@@ -12,6 +12,15 @@ public class ClienteConexion {
         this.port = port;
     }
 
+    // Método para testear conexión
+    public boolean testConexion() {
+        try (Socket socket = new Socket(host, port)) {
+            return socket.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public String login(String username, String password) {
         try (Socket socket = new Socket(host, port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -28,7 +37,6 @@ public class ClienteConexion {
         return null;
     }
 
-
     public String enviarConsultaConToken(String token, String consulta) {
         try (Socket socket = new Socket(host, port);
              PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
@@ -36,9 +44,9 @@ public class ClienteConexion {
 
             if (consulta.startsWith("LOGOUT")){
                 out.println(consulta);
-            }else
-            
-            out.println("QUERY " + token + " " + consulta);
+            } else {
+                out.println("QUERY " + token + " " + consulta);
+            }
             return in.readLine();
 
         } catch (Exception e) {

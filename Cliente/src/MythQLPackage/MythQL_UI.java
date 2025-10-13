@@ -20,11 +20,15 @@ public class MythQL_UI extends JFrame {
     private JTextPane consolePane;
     private JPanel topPanel, leftPanel, bottomPanel;
     private String token;
+    private String host;
+    private int port;
     private String lastErrorMsg = "";
     private Timer highlightTimer;
 
-    public MythQL_UI(String token) {
+    public MythQL_UI(String token, String host, int port) {
         this.token = token;
+        this.host = host;
+        this.port = port;
         setTitle("MYTHQL");
         setSize(1100, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -188,18 +192,18 @@ public class MythQL_UI extends JFrame {
             return;
         }
 
-        // --- Separar comandos por ';' pero sin romper si hay comillas ---
         List<String> comandos = dividirPorPuntoYComa(consulta);
 
         for (String comando : comandos) {
             comando = comando.trim();
-            if (comando.isEmpty()) continue; // ignorar vacíos
+            if (comando.isEmpty()) continue;
 
             GestorSintaxis GS = new GestorSintaxis(this);
             try {
                 if (GS.enviarConsulta(comando)) {
                     try {
-                        ClienteConexion conexion = new ClienteConexion("localhost", 12345);
+                        // Usar el host y port configurados
+                        ClienteConexion conexion = new ClienteConexion(host, port);
                         String respuestaServidor = conexion.enviarConsultaConToken(token, comando);
 
                         logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
@@ -209,16 +213,15 @@ public class MythQL_UI extends JFrame {
                             logMessage(respuestaServidor, Color.GREEN);
                         }
 
-                        // Esperar un poquito entre comandos para claridad (opcional)
                         Thread.sleep(150);
 
                     } catch (Exception ex) {
                         logError("Error al conectar con servidor: " + ex.getMessage());
-                        break; // detener ejecución
+                        break;
                     }
                 } else {
                     logError("ERROR de sintaxis: " + comando);
-                    break; // detener ejecución
+                    break;
                 }
             } catch (Exception e) {
                 logError("ERROR inesperado: " + e.getMessage());

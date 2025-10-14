@@ -261,20 +261,12 @@ public class MythQL_UI extends JFrame {
 
     private void mostrarNotificacion(String mensaje) {
         SwingUtilities.invokeLater(() -> {
-            logMessage(mensaje, Color.ORANGE);
+            logMessage("[NOTIFICACION] " + mensaje, Color.ORANGE);
             
             // Actualizar esquemas cuando hay cambios estructurales
             if (mensaje.contains("creada") || mensaje.contains("eliminada") || 
                 mensaje.contains("insertados") || mensaje.contains("cambió base")) {
                 cargarEsquemasJerarquicos();
-            }
-            
-            // Notificación emergente para cambios importantes
-            if (mensaje.contains("creada") || mensaje.contains("eliminada")) {
-                JOptionPane.showMessageDialog(this, 
-                    mensaje, 
-                    "Nueva Notificación", 
-                    JOptionPane.INFORMATION_MESSAGE);
             }
         });
     }
@@ -447,30 +439,9 @@ public class MythQL_UI extends JFrame {
     }
 
     private void mostrarWizard(String errorMsg) {
-        JFrame wizardFrame = new JFrame("Wizard");
-        wizardFrame.setSize(500, 200);
-        wizardFrame.setLocationRelativeTo(this);
-
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JLabel errorLabel = new JLabel(errorMsg);
-        errorLabel.setForeground(Color.RED);
-        errorLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-
-        JLabel scrollLabel = new JLabel("   Consulte el Scroll");
-        scrollLabel.setForeground(new Color(0, 102, 204));
-        scrollLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        scrollLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        scrollLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                abrirSacredScroll();
-            }
-        });
-
-        panel.add(errorLabel);
-        panel.add(scrollLabel);
-        wizardFrame.add(panel);
-        wizardFrame.setVisible(true);
+        // En lugar de mostrar una ventana, mostrar el mensaje en la consola
+        logMessage("[WIZARD] Error: " + errorMsg, Color.YELLOW);
+        logMessage("[WIZARD] Consulte el Sacred Scroll para más información", Color.YELLOW);
     }
 
     private void guardarQueryActual() {
@@ -478,8 +449,7 @@ public class MythQL_UI extends JFrame {
         String contenido = area.getText().trim();
 
         if (contenido.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "El query está vacío, nada que guardar.",
-                    "Aviso", JOptionPane.WARNING_MESSAGE);
+            logMessage("El query está vacío, nada que guardar.", Color.YELLOW);
             return;
         }
 
@@ -491,47 +461,24 @@ public class MythQL_UI extends JFrame {
             Files.write(path, contenido.getBytes(StandardCharsets.UTF_8),
                         StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
 
-            JOptionPane.showMessageDialog(this, "Query guardado en " + nombreArchivo,
-                    "Guardado", JOptionPane.INFORMATION_MESSAGE);
+            logMessage("Query guardado en " + nombreArchivo, Color.GREEN);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al guardar el archivo: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            logError("Error al guardar el archivo: " + ex.getMessage());
         }
     }
 
     private void abrirSacredScroll() {
-        JPanel panel = new JPanel(new BorderLayout(10,10));
-        JLabel label = new JLabel("Are you sure you want to unleash chaos?", SwingConstants.CENTER);
-        label.setFont(new Font("Arial", Font.BOLD, 16));
-        panel.add(label, BorderLayout.CENTER);
-
-        JButton btnYes = new JButton("Yes");
-        JButton btnNo = new JButton("No");
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.add(btnYes);
-        buttonPanel.add(btnNo);
-        panel.add(buttonPanel, BorderLayout.SOUTH);
-
-        JDialog dialog = new JDialog(this, "Sacred Scroll", true);
-        dialog.getContentPane().add(panel);
-        dialog.setSize(400, 150);
-        dialog.setLocationRelativeTo(this);
-
-        btnYes.addActionListener(e -> {
-            try {
-                File pdfFile = new File(getClass().getResource("/MythQL DDL.pdf").toURI());
-                if (pdfFile.exists() && Desktop.isDesktopSupported()) {
-                    Desktop.getDesktop().open(pdfFile);
-                }
-            } catch (URISyntaxException | java.io.IOException ex) {
-                JOptionPane.showMessageDialog(this, "Error al abrir PDF: " + ex.getMessage(),
-                        "Error", JOptionPane.ERROR_MESSAGE);
+        try {
+            File pdfFile = new File(getClass().getResource("/MythQL DDL.pdf").toURI());
+            if (pdfFile.exists() && Desktop.isDesktopSupported()) {
+                Desktop.getDesktop().open(pdfFile);
+                logMessage("Sacred Scroll abierto", Color.CYAN);
+            } else {
+                logError("No se pudo abrir el Sacred Scroll");
             }
-            dialog.dispose();
-        });
-
-        btnNo.addActionListener(e -> dialog.dispose());
-        dialog.setVisible(true);
+        } catch (URISyntaxException | java.io.IOException ex) {
+            logError("Error al abrir PDF: " + ex.getMessage());
+        }
     }
 
     private JTextPane getCurrentTextPane() {
@@ -575,6 +522,7 @@ public class MythQL_UI extends JFrame {
                 consolePane.setBackground(consoleBg);
                 consolePane.setForeground(consoleFg);
                 dialog.dispose();
+                logMessage("Tema cambiado a: " + nombre, Color.CYAN);
             });
 
             btnTema.addMouseListener(new MouseAdapter() {

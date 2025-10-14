@@ -248,10 +248,10 @@ public class MythQL_UI extends JFrame {
             boolean exito = clienteNotificaciones.conectarYSuscribir(token, this::mostrarNotificacion);
             
             if (exito) {
-                logMessage("✅ Notificaciones en tiempo real ACTIVADAS", Color.CYAN);
+                logMessage("Notificaciones en tiempo real ACTIVADAS", Color.CYAN);
                 System.out.println("Cliente de notificaciones conectado y escuchando...");
             } else {
-                logError("❌ No se pudieron activar las notificaciones");
+                logError("No se pudieron activar las notificaciones");
             }
             
         } catch (Exception e) {
@@ -261,7 +261,7 @@ public class MythQL_UI extends JFrame {
 
     private void mostrarNotificacion(String mensaje) {
         SwingUtilities.invokeLater(() -> {
-            logMessage("🔔 " + mensaje, Color.ORANGE);
+            logMessage(mensaje, Color.ORANGE);
             
             // Actualizar esquemas cuando hay cambios estructurales
             if (mensaje.contains("creada") || mensaje.contains("eliminada") || 

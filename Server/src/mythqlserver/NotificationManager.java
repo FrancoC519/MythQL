@@ -18,18 +18,18 @@ public class NotificationManager {
     
     public void suscribirCliente(String token, Socket socket) {
         clientesSuscritos.put(token, socket);
-        log("✅ Cliente suscrito a notificaciones, token: " + token);
+        log("Cliente suscrito a notificaciones, token: " + token);
     }
     
     public void desuscribirCliente(String token) {
         Socket removed = clientesSuscritos.remove(token);
         if (removed != null) {
-            log("❌ Cliente desuscrito, token: " + token);
+            log("Cliente desuscrito, token: " + token);
         }
     }
     
     public void broadcastNotificacion(String mensaje) {
-        log("📢 Broadcasting: " + mensaje);
+        log("Broadcasting: " + mensaje);
         
         List<String> tokensARemover = new ArrayList<>();
         
@@ -45,10 +45,10 @@ public class NotificationManager {
                 
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 out.println("NOTIFICATION " + mensaje);
-                log("📨 Notificación enviada a token: " + token);
+                log("Notificación enviada a token: " + token);
                 
             } catch (IOException e) {
-                log("💀 Cliente desconectado, removiendo: " + token);
+                log("Cliente desconectado, removiendo: " + token);
                 tokensARemover.add(token);
             }
         }

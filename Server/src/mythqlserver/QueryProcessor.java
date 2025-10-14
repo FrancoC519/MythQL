@@ -24,25 +24,25 @@ public class QueryProcessor {
         User user = sesiones.get(token);
         if (user == null) {
             out.println("ERROR sesion no valida");
-            log("❌ Intento de consulta con token inválido: " + token);
+            log("Intento de consulta con token inválido: " + token);
             return;
         }
 
-        log("🔍 Consulta de " + user.getUsername() + ": " + consulta);
+        log("Consulta de " + user.getUsername() + ": " + consulta);
         String resultado = gestorConsultas.procesarConsulta(consulta, user);
         out.println("RESULT " + resultado);
-        log("📝 Resultado: " + resultado);
+        log("Resultado: " + resultado);
         
         if (esConsultaQueModifica(consulta)) {
             String notificacion = "Cambio por " + user.getUsername() + ": " + 
                                 extraerTipoCambio(consulta);
-            log("📢 Notificando: " + notificacion);
+            log("Notificando: " + notificacion);
             notificationManager.broadcastNotificacion(notificacion);
         }
     }
     
     public String obtenerEsquemasJerarquicos() {
-        log("📊 Solicitando esquemas jerárquicos");
+        log("Solicitando esquemas jerárquicos");
         return gestorConsultas.obtenerEsquemasJerarquicos();
     }
     

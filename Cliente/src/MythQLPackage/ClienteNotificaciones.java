@@ -59,7 +59,6 @@ public class ClienteNotificaciones {
             
             try {
                 String linea;
-                // ↓ ↓ ↓ ESTE ES EL LOOP INFINITO EN SEGUNDO PLANO ↓ ↓ ↓
                 while (escuchando && (linea = in.readLine()) != null) {
                     System.out.println("Notificación recibida: " + linea);
                     

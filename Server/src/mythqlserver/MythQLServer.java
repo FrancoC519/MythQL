@@ -3,22 +3,24 @@ package mythqlserver;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class MythQLServer {
-
-    private int port; // Ya no es final
+    private int port;
     private UserStore userStore = new UserStore();
     private Map<String, User> sesiones = new ConcurrentHashMap<>();
     private MythQLServerUI serverUI;
     private ServerSocket serverSocket;
+    
+    // Lista de consumidores para notificaciones
+    private List<Consumer<String>> notificacionConsumers = new ArrayList<>();
+    private Map<String, ClientHandler> clientesConectados = new ConcurrentHashMap<>();
 
-    // Constructor sin UI (modo consola) - ahora recibe puerto
     public MythQLServer(int port) {
         this.port = port;
         this.serverUI = null;
     }
 
-    // Constructor con UI - ahora recibe puerto
     public MythQLServer(MythQLServerUI ui, int port) {
         this.serverUI = ui;
         this.port = port;
@@ -39,6 +41,10 @@ public class MythQLServer {
                 } else {
                     handler = new ClientHandler(socket, userStore, sesiones);
                 }
+                
+                handler.setServer(this);
+                String clientId = socket.getInetAddress() + ":" + socket.getPort();
+                clientesConectados.put(clientId, handler);
 
                 new Thread(handler).start();
             }
@@ -61,7 +67,30 @@ public class MythQLServer {
         }
     }
 
-    // Método de logging unificado
+    // Métodos para notificaciones
+    public void suscribirANotificaciones(Consumer<String> consumer) {
+        notificacionConsumers.add(consumer);
+    }
+
+    public void desuscribirDeNotificaciones(Consumer<String> consumer) {
+        notificacionConsumers.remove(consumer);
+    }
+
+    public void broadcastNotificacion(String mensaje) {
+        log("Broadcasting: " + mensaje, java.awt.Color.ORANGE);
+        for (Consumer<String> consumer : new ArrayList<>(notificacionConsumers)) {
+            try {
+                consumer.accept(mensaje);
+            } catch (Exception e) {
+                desuscribirDeNotificaciones(consumer);
+            }
+        }
+    }
+
+    public void removerCliente(String clientId) {
+        clientesConectados.remove(clientId);
+    }
+
     private void log(String msg, java.awt.Color color) {
         if (serverUI != null) {
             serverUI.logMessage(msg, color);
@@ -70,13 +99,11 @@ public class MythQLServer {
         }
     }
 
-    // Método main flexible modificado
     public static void main(String[] args) {
         boolean usarUI = true;
 
         if (usarUI) {
             javax.swing.SwingUtilities.invokeLater(() -> {
-                // Mostrar diálogo de configuración primero
                 ServerConfigDialog configDialog = new ServerConfigDialog(null);
                 configDialog.setVisible(true);
 
@@ -88,22 +115,17 @@ public class MythQLServer {
 
                 int port = configDialog.getPort();
                 
-                // Ahora crear la UI principal del servidor
                 MythQLServerUI ui = new MythQLServerUI(port);
                 ui.setVisible(true);
 
-                // Pasar el puerto seleccionado al servidor
                 MythQLServer server = new MythQLServer(ui, port);
                 
-                // Iniciar servidor en hilo separado
                 Thread serverThread = new Thread(server::start);
                 serverThread.start();
                 
-                // Configurar el servidor en la UI para poder detenerlo
                 ui.setServer(server);
             });
         } else {
-            // Modo consola - usar puerto por defecto o argumento
             int port = 12345;
             if (args.length > 0) {
                 try {

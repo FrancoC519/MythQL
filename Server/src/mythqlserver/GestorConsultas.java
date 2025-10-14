@@ -7,9 +7,22 @@ import java.util.function.Consumer;
 public class GestorConsultas {
     private final String dbPath = "Databases/";
     private Consumer<String> messageCallback;
+    private Consumer<String> notificacionCallback;
 
-    public GestorConsultas() { this.messageCallback = null; }
-    public GestorConsultas(Consumer<String> callback) { this.messageCallback = callback; }
+    public GestorConsultas() { 
+        this.messageCallback = null; 
+        this.notificacionCallback = null;
+    }
+    
+    public GestorConsultas(Consumer<String> callback) { 
+        this.messageCallback = callback; 
+        this.notificacionCallback = null;
+    }
+    
+    public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback) { 
+        this.messageCallback = msgCallback;
+        this.notificacionCallback = notifCallback;
+    }
 
     public String procesarConsulta(String consulta, User user) {
         List<String> tokens = tokenizar(consulta);
@@ -28,21 +41,45 @@ public class GestorConsultas {
         }
     }
 
+    // NUEVO: Método para obtener esquemas jerárquicos
+    public String obtenerEsquemasJerarquicos() {
+        try {
+            CSVDatabaseManager db = new CSVDatabaseManager();
+            List<String> bases = db.listarBases();
+            Map<String, List<String>> esquemas = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+            
+            for (String base : bases) {
+                List<String> tablas = db.listarTablas(base);
+                esquemas.put(base, tablas);
+            }
+            
+            // Formato: base1{tabla1,tabla2};base2{tabla3,tabla4}
+            StringBuilder sb = new StringBuilder();
+            for (Map.Entry<String, List<String>> entry : esquemas.entrySet()) {
+                if (sb.length() > 0) sb.append(";");
+                sb.append(entry.getKey()).append("{");
+                sb.append(String.join(",", entry.getValue()));
+                sb.append("}");
+            }
+            
+            return sb.toString();
+        } catch (Exception e) {
+            return "ERROR: " + e.getMessage();
+        }
+    }
+
     private List<String> tokenizar(String consulta) {
         Pattern pattern = Pattern.compile("\"[^\"]*\"|[A-Za-z0-9_]+|[{}(),\\[\\]]");
         Matcher matcher = pattern.matcher(consulta);
         List<String> tokens = new ArrayList<>();
         while (matcher.find()) {
             String tok = matcher.group();
-            // solo mayúsculas en identificadores, no en strings
             if (!tok.startsWith("\"")) tok = tok.toUpperCase();
             tokens.add(tok);
         }
         return tokens;
     }
 
-
-    // === MANIFEST ===
     private String comandoManifest(List<String> tokens, User user) {
         CSVDatabaseManager db = new CSVDatabaseManager();
         if (tokens.size() != 2) return "ERROR: Uso: MANIFEST DATABASES | MANIFEST TABLES";
@@ -58,7 +95,6 @@ public class GestorConsultas {
         return "ERROR: MANIFEST debe ser DATABASES o TABLES";
     }
 
-    // === DEPICT ===
     private String comandoDepict(List<String> tokens, User user) {
         if (tokens.size() != 2) return "ERROR: Uso: DEPICT <tabla>";
         if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
@@ -77,6 +113,11 @@ public class GestorConsultas {
         }
         user.setBaseActiva(base);
         enviarMensaje("Base activa cambiada a: " + base);
+        
+        if (notificacionCallback != null) {
+            notificacionCallback.accept("Usuario cambió base activa a: " + base);
+        }
+        
         return "OK: Base de datos activa = " + base;
     }
 
@@ -93,6 +134,12 @@ public class GestorConsultas {
             msg = exito ? "OK: Base de datos '" + nombreDB + "' creada."
                         : "ERROR: No se pudo crear la base de datos.";
             enviarMensaje(msg);
+            
+            if (exito && notificacionCallback != null) {
+                notificacionCallback.accept("Base de datos '" + nombreDB + "' creada por " + 
+                                           (user != null ? user.getUsername() : "sistema"));
+            }
+            
             return msg;
         }
         if ("TABLE".equals(tokens.get(1))) {
@@ -113,6 +160,12 @@ public class GestorConsultas {
             msg = exito ? "OK: Tabla '" + nombreTabla + "' creada en DB " + user.getBaseActiva()
                         : "ERROR: No se pudo crear la tabla.";
             enviarMensaje(msg);
+            
+            if (exito && notificacionCallback != null) {
+                notificacionCallback.accept("Tabla '" + nombreTabla + "' creada en " + 
+                                           user.getBaseActiva() + " por " + user.getUsername());
+            }
+            
             return msg;
         }
         msg = "ERROR: SUMMON debe ser DATABASE o TABLE.";
@@ -133,7 +186,6 @@ public class GestorConsultas {
             return "ERROR: Tabla '" + tableName + "' no encontrada.";
 
         try {
-            // === Leer definición desde el archivo de la DB ===
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists())
                 return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
@@ -149,7 +201,6 @@ public class GestorConsultas {
             if (definicion == null)
                 return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
 
-            // === Extraer nombres de columnas de la definición ===
             Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
             Matcher m = defPat.matcher(definicion);
             List<String> nombresColumnas = new ArrayList<>();
@@ -159,7 +210,6 @@ public class GestorConsultas {
             if (nombresColumnas.isEmpty())
                 return "ERROR: No se pudieron extraer las columnas de la definición.";
 
-            // === Si se especifican columnas dentro de { } ===
             List<String> columnasFiltradas = new ArrayList<>();
             if (tokens.size() > 2 && "{".equals(tokens.get(2))) {
                 int i = 3;
@@ -185,20 +235,16 @@ public class GestorConsultas {
                     indices.add(i);
             }
 
-            // === Leer los registros del archivo de la tabla ===
             List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
             if (lineas.isEmpty()) {
                 enviarMensaje("(tabla vacía)");
                 return "(tabla vacía)";
             }
 
-            // === Construir salida: encabezado + registros ===
             StringBuilder sb = new StringBuilder();
 
-            // Encabezado de tabla
             String header1 = "Tabla: " + tableName.toUpperCase() + " ";
             String header2 = String.join(" | ", indices.stream().map(nombresColumnas::get).toList());
-            
             
             enviarMensaje(header1);
             enviarMensaje(header2);
@@ -208,7 +254,6 @@ public class GestorConsultas {
             sb.append(header2).append("");
             sb.append("||");
 
-            // Registros
             for (String linea : lineas) {
                 String[] valores = linea.split(",", -1);
                 List<String> seleccionados = new ArrayList<>();
@@ -239,16 +284,20 @@ public class GestorConsultas {
             return msg;
         }
         CSVDatabaseManager db = new CSVDatabaseManager();
-        // BURN DATABASE <db>
         if ("DATABASE".equals(tokens.get(1))) {
             String dbName = tokens.get(2);
             boolean exito = db.eliminarDatabase(dbName);
             String msg = exito ? "OK: Base de datos '" + dbName + "' eliminada."
                                : "ERROR: No se pudo eliminar la base de datos.";
             enviarMensaje(msg);
+            
+            if (exito && notificacionCallback != null) {
+                notificacionCallback.accept("Base de datos '" + dbName + "' eliminada por " + 
+                                           (user != null ? user.getUsername() : "sistema"));
+            }
+            
             return msg;
         }
-        // BURN TABLE <table>
         if ("TABLE".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) {
                 String msg = "ERROR: No hay base activa.";
@@ -260,6 +309,12 @@ public class GestorConsultas {
             String msg = exito ? "OK: Tabla '" + nombreTabla + "' eliminada de DB '" + user.getBaseActiva() + "'."
                                : "ERROR: No se pudo eliminar la tabla.";
             enviarMensaje(msg);
+            
+            if (exito && notificacionCallback != null) {
+                notificacionCallback.accept("Tabla '" + nombreTabla + "' eliminada de " + 
+                                           user.getBaseActiva() + " por " + user.getUsername());
+            }
+            
             return msg;
         }
         return "ERROR: BURN debe ser DATABASE o TABLE.";
@@ -305,10 +360,15 @@ public class GestorConsultas {
 
         CSVDatabaseManager db = new CSVDatabaseManager();
         boolean ok = db.insertarRegistros(user.getBaseActiva(), tabla, columnas, registros);
+        
+        if (ok && notificacionCallback != null) {
+            notificacionCallback.accept("Registros insertados en tabla '" + tabla + "' de " + 
+                                       user.getBaseActiva() + " por " + user.getUsername());
+        }
+        
         return ok ? "OK: Registros insertados en " + tabla
                   : "ERROR: Fallo al insertar registros en " + tabla;
     }
-
 
     private void enviarMensaje(String msg) {
         if (messageCallback != null) {

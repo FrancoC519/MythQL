@@ -13,7 +13,11 @@ import java.awt.Desktop;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import javax.swing.Timer;
+import javax.swing.tree.*;
+import javax.swing.text.Element;
 
 public class MythQL_UI extends JFrame {
     private JTabbedPane tabs;
@@ -24,11 +28,24 @@ public class MythQL_UI extends JFrame {
     private int port;
     private String lastErrorMsg = "";
     private Timer highlightTimer;
+    private ClienteConexion conexionNotificaciones;
+    private JTree schemaTree;
+    private DefaultTreeModel treeModel;
 
     public MythQL_UI(String token, String host, int port) {
         this.token = token;
         this.host = host;
         this.port = port;
+        initializeUI();
+
+        // Configurar notificaciones DESPUÉS de que la UI esté lista
+        SwingUtilities.invokeLater(() -> {
+            configurarNotificaciones(token, host, port);
+            cargarEsquemasJerarquicos();
+        });
+    }
+
+    private void initializeUI() {
         setTitle("MYTHQL");
         setSize(1100, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -47,14 +64,16 @@ public class MythQL_UI extends JFrame {
         JButton btnExecuteSel = new JButton("Execute Selected");
         JButton btnSacred = new JButton("Sacred Scroll");
         JButton btnTheme = new JButton("Change Theme");
+        JButton btnRefreshSchemas = new JButton("Refresh Schemas");
 
         topPanel.add(btnExecute);
         topPanel.add(btnExecuteSel);
         topPanel.add(btnSacred);
         topPanel.add(btnTheme);
+        topPanel.add(btnRefreshSchemas);
 
-        // ------------------- Botones de engranaje -------------------
-        JButton gearGuardar = new JButton("⚙"); // Primer engranaje = guardar query
+        // Engranajes
+        JButton gearGuardar = new JButton("⚙");
         gearGuardar.setBackground(new Color(255, 204, 102));
         gearGuardar.addActionListener(e -> guardarQueryActual());
         topPanel.add(gearGuardar);
@@ -67,37 +86,69 @@ public class MythQL_UI extends JFrame {
 
         add(topPanel, BorderLayout.NORTH);
 
-        // ------------------- Panel izquierdo -------------------
-        leftPanel = new JPanel();
-        leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
-        leftPanel.setPreferredSize(new Dimension(220, 0));
+        // ------------------- Panel izquierdo (ESQUEMAS JERÁRQUICOS) -------------------
+        leftPanel = new JPanel(new BorderLayout());
+        leftPanel.setPreferredSize(new Dimension(250, 0));
         leftPanel.setBackground(new Color(242, 242, 242));
 
-        JLabel lblManagement = new JLabel("MANAGEMENT");
+        JLabel lblManagement = new JLabel("DATABASE SCHEMAS");
         lblManagement.setFont(new Font("Arial", Font.BOLD, 12));
-        leftPanel.add(lblManagement);
+        lblManagement.setBorder(BorderFactory.createEmptyBorder(10, 10, 5, 10));
+        leftPanel.add(lblManagement, BorderLayout.NORTH);
 
-        String[] mgmtItems = {
-                "Server Status", "Client Connections", "Users and Privileges",
-                "Status and System Variables", "Data Export", "Data Import/Restore"
-        };
-        for (String item : mgmtItems) {
-            JLabel opt = new JLabel(" - " + item);
-            leftPanel.add(opt);
-        }
+        // Árbol de esquemas
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Bases de Datos");
+        treeModel = new DefaultTreeModel(root);
+        schemaTree = new JTree(treeModel);
+        schemaTree.setRootVisible(false);
+        schemaTree.setShowsRootHandles(true);
+        
+        // Renderer personalizado para el árbol
+        schemaTree.setCellRenderer(new DefaultTreeCellRenderer() {
+            @Override
+            public Component getTreeCellRendererComponent(JTree tree, Object value,
+                    boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+                super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+                
+                DefaultMutableTreeNode node = (DefaultMutableTreeNode) value;
+                if (node.getParent() == treeModel.getRoot()) {
+                    // Nodo de base de datos
+                    setIcon(UIManager.getIcon("FileView.directoryIcon"));
+                    setFont(getFont().deriveFont(Font.BOLD));
+                } else {
+                    // Nodo de tabla
+                    setIcon(UIManager.getIcon("FileView.fileIcon"));
+                }
+                return this;
+            }
+        });
 
-        leftPanel.add(Box.createVerticalStrut(10));
-        JLabel lblSchemas = new JLabel("SCHEMAS");
-        lblSchemas.setFont(new Font("Arial", Font.BOLD, 12));
-        leftPanel.add(lblSchemas);
+        // Listener para doble clic en tablas
+        schemaTree.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    TreePath path = schemaTree.getPathForLocation(e.getX(), e.getY());
+                    if (path != null) {
+                        DefaultMutableTreeNode node = (DefaultMutableTreeNode) path.getLastPathComponent();
+                        if (node.getParent() != treeModel.getRoot() && node.getParent() != null) {
+                            // Es una tabla - insertar USE y SELECT
+                            String baseDatos = node.getParent().toString();
+                            String tabla = node.toString();
+                            String consulta = "UTILIZE " + baseDatos + ";\nBRING " + tabla;
+                            getCurrentTextPane().setText(consulta);
+                        } else if (node.getParent() == treeModel.getRoot()) {
+                            // Es una base de datos - insertar USE
+                            String baseDatos = node.toString();
+                            String consulta = "UTILIZE " + baseDatos;
+                            getCurrentTextPane().setText(consulta);
+                        }
+                    }
+                }
+            }
+        });
 
-        DefaultListModel<String> model = new DefaultListModel<>();
-        model.addElement("customer");
-        model.addElement("film");
-        model.addElement("language");
-        JList<String> schemaList = new JList<>(model);
-        JScrollPane schemaScroll = new JScrollPane(schemaList);
-        leftPanel.add(schemaScroll);
+        JScrollPane treeScroll = new JScrollPane(schemaTree);
+        leftPanel.add(treeScroll, BorderLayout.CENTER);
 
         add(leftPanel, BorderLayout.WEST);
 
@@ -109,7 +160,6 @@ public class MythQL_UI extends JFrame {
             JScrollPane scroll = new JScrollPane(queryPane);
             tabs.add("QUERY " + i, scroll);
 
-            // Listener para resaltar keywords optimizado con Timer
             queryPane.getDocument().addDocumentListener(new SimpleDocumentListener() {
                 @Override
                 public void update(DocumentEvent e) {
@@ -150,17 +200,16 @@ public class MythQL_UI extends JFrame {
 
         // ------------------- Listeners -------------------
         btnExecute.addActionListener(e -> ejecutarConsulta(getCurrentTextPane().getText().trim()));
-
         btnExecuteSel.addActionListener(e -> {
             JTextPane currentPane = getCurrentTextPane();
             String sel = currentPane.getSelectedText();
             if (sel == null || sel.isEmpty()) {
                 try {
                     int caret = currentPane.getCaretPosition();
-                    Element root = currentPane.getDocument().getDefaultRootElement();
-                    int line = root.getElementIndex(caret);
-                    int start = root.getElement(line).getStartOffset();
-                    int end = root.getElement(line).getEndOffset();
+                    Element root2 = currentPane.getDocument().getDefaultRootElement();
+                    int line = root2.getElementIndex(caret);
+                    int start = root2.getElement(line).getStartOffset();
+                    int end = root2.getElement(line).getEndOffset();
                     sel = currentPane.getDocument().getText(start, end - start).trim();
                 } catch (Exception ex) {
                     sel = "";
@@ -171,8 +220,8 @@ public class MythQL_UI extends JFrame {
 
         btnSacred.addActionListener(e -> abrirSacredScroll());
         btnTheme.addActionListener(e -> openThemeSelector());
+        btnRefreshSchemas.addActionListener(e -> cargarEsquemasJerarquicos());
         
-        // logout automático
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -181,11 +230,114 @@ public class MythQL_UI extends JFrame {
                 } catch (Exception ex) {
                     System.out.println("Error enviando logout: " + ex.getMessage());
                 }
+                if (conexionNotificaciones != null) {
+                    conexionNotificaciones.detenerEscucha();
+                }
             }
         });
     }
 
-    // ------------------- Ejecutar consulta -------------------
+    // NUEVO: Cargar esquemas jerárquicos
+    private void cargarEsquemasJerarquicos() {
+        try {
+            ClienteConexion conn = new ClienteConexion(host, port);
+            String respuesta = conn.obtenerEsquemas(token);
+            
+            if (respuesta.startsWith("ERROR")) {
+                logError("Error cargando esquemas: " + respuesta);
+                return;
+            }
+            
+            actualizarArbolEsquemas(respuesta);
+            logMessage("Esquemas actualizados", Color.CYAN);
+            
+        } catch (Exception e) {
+            logError("Error cargando esquemas: " + e.getMessage());
+        }
+    }
+
+    // NUEVO: Actualizar árbol con datos jerárquicos
+    private void actualizarArbolEsquemas(String datosEsquemas) {
+        DefaultMutableTreeNode root = new DefaultMutableTreeNode("Bases de Datos");
+        
+        try {
+            // Formato: base1{tabla1,tabla2};base2{tabla3,tabla4}
+            String[] bases = datosEsquemas.split(";");
+            for (String base : bases) {
+                int inicioTablas = base.indexOf('{');
+                int finTablas = base.indexOf('}');
+                
+                if (inicioTablas != -1 && finTablas != -1) {
+                    String nombreBase = base.substring(0, inicioTablas);
+                    String tablasStr = base.substring(inicioTablas + 1, finTablas);
+                    
+                    DefaultMutableTreeNode baseNode = new DefaultMutableTreeNode(nombreBase);
+                    
+                    if (!tablasStr.isEmpty()) {
+                        String[] tablas = tablasStr.split(",");
+                        for (String tabla : tablas) {
+                            if (!tabla.trim().isEmpty()) {
+                                baseNode.add(new DefaultMutableTreeNode(tabla.trim()));
+                            }
+                        }
+                    }
+                    
+                    root.add(baseNode);
+                }
+            }
+            
+            treeModel.setRoot(root);
+            treeModel.reload();
+            
+            // Expandir todos los nodos
+            for (int i = 0; i < schemaTree.getRowCount(); i++) {
+                schemaTree.expandRow(i);
+            }
+            
+        } catch (Exception e) {
+            logError("Error parseando esquemas: " + e.getMessage());
+        }
+    }
+
+    private void configurarNotificaciones(String token, String host, int port) {
+        try {
+            conexionNotificaciones = new ClienteConexion(host, port);
+            String respuesta = conexionNotificaciones.suscribirANotificaciones(token);
+            
+            if (respuesta.startsWith("OK")) {
+                conexionNotificaciones.iniciarEscuchaNotificaciones(this::mostrarNotificacion);
+                logMessage("Suscripción a notificaciones activada", Color.CYAN);
+            } else {
+                logError("No se pudo suscribir a notificaciones: " + respuesta);
+            }
+        } catch (Exception e) {
+            logError("Error configurando notificaciones: " + e.getMessage());
+        }
+    }
+
+    private void mostrarNotificacion(String mensaje) {
+        SwingUtilities.invokeLater(() -> {
+            logMessage("🔔 " + mensaje, Color.ORANGE);
+            
+            // Actualizar esquemas cuando hay cambios
+            if (mensaje.contains("creada") || mensaje.contains("eliminada") || 
+                mensaje.contains("insertados") || mensaje.contains("cambió base")) {
+                cargarEsquemasJerarquicos();
+            }
+            
+            // Opcional: Mostrar notificación emergente para cambios importantes
+            if (mensaje.contains("creada") || mensaje.contains("eliminada")) {
+                JOptionPane.showMessageDialog(this, 
+                    mensaje, 
+                    "Nueva Notificación", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+    }
+
+    // Resto de los métodos existentes (ejecutarConsulta, logMessage, etc.)
+    // ... (mantener todos los métodos existentes igual)
+    
     private void ejecutarConsulta(String consulta) {
         if (consulta == null || consulta.isEmpty()) {
             logError("No hay consulta para ejecutar.");
@@ -202,7 +354,6 @@ public class MythQL_UI extends JFrame {
             try {
                 if (GS.enviarConsulta(comando)) {
                     try {
-                        // Usar el host y port configurados
                         ClienteConexion conexion = new ClienteConexion(host, port);
                         String respuestaServidor = conexion.enviarConsultaConToken(token, comando);
 
@@ -211,6 +362,13 @@ public class MythQL_UI extends JFrame {
                             logMessage(respuestaServidor, Color.RED);
                         } else {
                             logMessage(respuestaServidor, Color.GREEN);
+                            
+                            // Actualizar esquemas si fue un comando que cambia estructura
+                            if (comando.toUpperCase().startsWith("SUMMON") || 
+                                comando.toUpperCase().startsWith("BURN") ||
+                                comando.toUpperCase().startsWith("UTILIZE")) {
+                                cargarEsquemasJerarquicos();
+                            }
                         }
 
                         Thread.sleep(150);
@@ -229,8 +387,7 @@ public class MythQL_UI extends JFrame {
             }
         }
     }
-    
-    // --- Divide un texto en comandos separados por ';' ignorando los que estén dentro de comillas ---
+
     private List<String> dividirPorPuntoYComa(String texto) {
         List<String> comandos = new ArrayList<>();
         StringBuilder actual = new StringBuilder();
@@ -254,7 +411,6 @@ public class MythQL_UI extends JFrame {
             }
         }
 
-        // último comando (si no terminó en ;)
         if (actual.length() > 0) {
             comandos.add(actual.toString());
         }
@@ -262,9 +418,6 @@ public class MythQL_UI extends JFrame {
         return comandos;
     }
 
-
-
-    // ------------------- Consola -------------------
     private void logMessage(String message, Color color) {
         StyledDocument doc = consolePane.getStyledDocument();
         Style style = consolePane.addStyle("Style", null);
@@ -294,7 +447,6 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    // ------------------- Wizard -------------------
     private void mostrarWizard(String errorMsg) {
         JFrame wizardFrame = new JFrame("Wizard");
         wizardFrame.setSize(500, 200);
@@ -322,7 +474,6 @@ public class MythQL_UI extends JFrame {
         wizardFrame.setVisible(true);
     }
 
-    // ------------------- Guardar query -------------------
     private void guardarQueryActual() {
         JTextPane area = getCurrentTextPane();
         String contenido = area.getText().trim();
@@ -333,7 +484,7 @@ public class MythQL_UI extends JFrame {
             return;
         }
 
-        int index = tabs.getSelectedIndex() + 1; // QUERY 1, 2, 3
+        int index = tabs.getSelectedIndex() + 1;
         String nombreArchivo = "Script" + index + ".mql";
 
         try {
@@ -349,7 +500,6 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    // ------------------- Sacred Scroll con prompt -------------------
     private void abrirSacredScroll() {
         JPanel panel = new JPanel(new BorderLayout(10,10));
         JLabel label = new JLabel("Are you sure you want to unleash chaos?", SwingConstants.CENTER);
@@ -385,14 +535,12 @@ public class MythQL_UI extends JFrame {
         dialog.setVisible(true);
     }
 
-    // ------------------- Obtener JTextPane actual -------------------
     private JTextPane getCurrentTextPane() {
         JScrollPane scroll = (JScrollPane) tabs.getSelectedComponent();
         JViewport viewport = scroll.getViewport();
         return (JTextPane) viewport.getView();
     }
 
-    // ------------------- Selector de tema -------------------
     private void openThemeSelector() {
         JDialog dialog = new JDialog(this, "Seleccionar Tema", true);
         dialog.setSize(350, 300);
@@ -450,13 +598,11 @@ public class MythQL_UI extends JFrame {
         dialog.setVisible(true);
     }
 
-    // ------------------- Resaltar keywords optimizado -------------------
     private void resaltarKeywordsCompleto(JTextPane pane) {
         StyledDocument doc = pane.getStyledDocument();
         try {
             String text = doc.getText(0, doc.getLength());
             
-            // Resetear todo el documento
             SimpleAttributeSet normal = new SimpleAttributeSet();
             StyleConstants.setForeground(normal, Color.BLACK);
             doc.setCharacterAttributes(0, doc.getLength(), normal, true);
@@ -467,7 +613,6 @@ public class MythQL_UI extends JFrame {
             for (String kw : keywords) {
                 int index = 0;
                 while ((index = upperText.indexOf(kw, index)) >= 0) {
-                    // Verificar que sea una palabra completa
                     boolean isWord = true;
                     if (index > 0) {
                         char before = upperText.charAt(index - 1);
@@ -496,7 +641,6 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    // ------------------- Listener simple para Document -------------------
     private abstract class SimpleDocumentListener implements DocumentListener {
         public abstract void update(DocumentEvent e);
         @Override

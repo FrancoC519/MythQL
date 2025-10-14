@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import javax.swing.Timer;
 import javax.swing.tree.*;
-import javax.swing.text.Element;
+import java.util.function.Consumer;
 
 public class MythQL_UI extends JFrame {
     private JTabbedPane tabs;
@@ -28,7 +28,11 @@ public class MythQL_UI extends JFrame {
     private int port;
     private String lastErrorMsg = "";
     private Timer highlightTimer;
-    private ClienteConexion conexionNotificaciones;
+    
+    // Conexiones separadas
+    private ClienteNotificaciones clienteNotificaciones;
+    private ClienteConexion clienteConsultas;
+    
     private JTree schemaTree;
     private DefaultTreeModel treeModel;
 
@@ -36,11 +40,12 @@ public class MythQL_UI extends JFrame {
         this.token = token;
         this.host = host;
         this.port = port;
+        this.clienteConsultas = new ClienteConexion(host, port);
         initializeUI();
-
+        
         // Configurar notificaciones DESPUÉS de que la UI esté lista
         SwingUtilities.invokeLater(() -> {
-            configurarNotificaciones(token, host, port);
+            configurarNotificaciones();
             cargarEsquemasJerarquicos();
         });
     }
@@ -206,10 +211,10 @@ public class MythQL_UI extends JFrame {
             if (sel == null || sel.isEmpty()) {
                 try {
                     int caret = currentPane.getCaretPosition();
-                    Element root2 = currentPane.getDocument().getDefaultRootElement();
-                    int line = root2.getElementIndex(caret);
-                    int start = root2.getElement(line).getStartOffset();
-                    int end = root2.getElement(line).getEndOffset();
+                    Element docRoot = currentPane.getDocument().getDefaultRootElement();
+                    int line = docRoot.getElementIndex(caret);
+                    int start = docRoot.getElement(line).getStartOffset();
+                    int end = docRoot.getElement(line).getEndOffset();
                     sel = currentPane.getDocument().getText(start, end - start).trim();
                 } catch (Exception ex) {
                     sel = "";
@@ -226,22 +231,57 @@ public class MythQL_UI extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 try {
-                    ejecutarConsulta("LOGOUT " + token);
+                    clienteConsultas.enviarConsultaConToken(token, "LOGOUT " + token);
                 } catch (Exception ex) {
                     System.out.println("Error enviando logout: " + ex.getMessage());
                 }
-                if (conexionNotificaciones != null) {
-                    conexionNotificaciones.detenerEscucha();
+                if (clienteNotificaciones != null) {
+                    clienteNotificaciones.detener();
                 }
             }
         });
     }
 
-    // NUEVO: Cargar esquemas jerárquicos
+    private void configurarNotificaciones() {
+        try {
+            clienteNotificaciones = new ClienteNotificaciones(host, port);
+            boolean exito = clienteNotificaciones.conectarYSuscribir(token, this::mostrarNotificacion);
+            
+            if (exito) {
+                logMessage("✅ Notificaciones en tiempo real ACTIVADAS", Color.CYAN);
+                System.out.println("Cliente de notificaciones conectado y escuchando...");
+            } else {
+                logError("❌ No se pudieron activar las notificaciones");
+            }
+            
+        } catch (Exception e) {
+            logError("Error configurando notificaciones: " + e.getMessage());
+        }
+    }
+
+    private void mostrarNotificacion(String mensaje) {
+        SwingUtilities.invokeLater(() -> {
+            logMessage("🔔 " + mensaje, Color.ORANGE);
+            
+            // Actualizar esquemas cuando hay cambios estructurales
+            if (mensaje.contains("creada") || mensaje.contains("eliminada") || 
+                mensaje.contains("insertados") || mensaje.contains("cambió base")) {
+                cargarEsquemasJerarquicos();
+            }
+            
+            // Notificación emergente para cambios importantes
+            if (mensaje.contains("creada") || mensaje.contains("eliminada")) {
+                JOptionPane.showMessageDialog(this, 
+                    mensaje, 
+                    "Nueva Notificación", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+    }
+
     private void cargarEsquemasJerarquicos() {
         try {
-            ClienteConexion conn = new ClienteConexion(host, port);
-            String respuesta = conn.obtenerEsquemas(token);
+            String respuesta = clienteConsultas.obtenerEsquemas(token);
             
             if (respuesta.startsWith("ERROR")) {
                 logError("Error cargando esquemas: " + respuesta);
@@ -256,7 +296,6 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    // NUEVO: Actualizar árbol con datos jerárquicos
     private void actualizarArbolEsquemas(String datosEsquemas) {
         DefaultMutableTreeNode root = new DefaultMutableTreeNode("Bases de Datos");
         
@@ -299,45 +338,6 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    private void configurarNotificaciones(String token, String host, int port) {
-        try {
-            conexionNotificaciones = new ClienteConexion(host, port);
-            String respuesta = conexionNotificaciones.suscribirANotificaciones(token);
-            
-            if (respuesta.startsWith("OK")) {
-                conexionNotificaciones.iniciarEscuchaNotificaciones(this::mostrarNotificacion);
-                logMessage("Suscripción a notificaciones activada", Color.CYAN);
-            } else {
-                logError("No se pudo suscribir a notificaciones: " + respuesta);
-            }
-        } catch (Exception e) {
-            logError("Error configurando notificaciones: " + e.getMessage());
-        }
-    }
-
-    private void mostrarNotificacion(String mensaje) {
-        SwingUtilities.invokeLater(() -> {
-            logMessage("🔔 " + mensaje, Color.ORANGE);
-            
-            // Actualizar esquemas cuando hay cambios
-            if (mensaje.contains("creada") || mensaje.contains("eliminada") || 
-                mensaje.contains("insertados") || mensaje.contains("cambió base")) {
-                cargarEsquemasJerarquicos();
-            }
-            
-            // Opcional: Mostrar notificación emergente para cambios importantes
-            if (mensaje.contains("creada") || mensaje.contains("eliminada")) {
-                JOptionPane.showMessageDialog(this, 
-                    mensaje, 
-                    "Nueva Notificación", 
-                    JOptionPane.INFORMATION_MESSAGE);
-            }
-        });
-    }
-
-    // Resto de los métodos existentes (ejecutarConsulta, logMessage, etc.)
-    // ... (mantener todos los métodos existentes igual)
-    
     private void ejecutarConsulta(String consulta) {
         if (consulta == null || consulta.isEmpty()) {
             logError("No hay consulta para ejecutar.");
@@ -354,8 +354,7 @@ public class MythQL_UI extends JFrame {
             try {
                 if (GS.enviarConsulta(comando)) {
                     try {
-                        ClienteConexion conexion = new ClienteConexion(host, port);
-                        String respuestaServidor = conexion.enviarConsultaConToken(token, comando);
+                        String respuestaServidor = clienteConsultas.enviarConsultaConToken(token, comando);
 
                         logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
                         if (respuestaServidor.startsWith("RESULT ERROR")) {
@@ -649,5 +648,14 @@ public class MythQL_UI extends JFrame {
         public void removeUpdate(DocumentEvent e) { update(e); }
         @Override
         public void changedUpdate(DocumentEvent e) { update(e); }
+    }
+
+    @Override
+    public void dispose() {
+        if (clienteNotificaciones != null) {
+            clienteNotificaciones.detener();
+            System.out.println("Conexión de notificaciones cerrada.");
+        }
+        super.dispose();
     }
 }

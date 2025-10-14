@@ -28,7 +28,7 @@ public class GestorConsultas {
         List<String> tokens = tokenizar(consulta);
         if (tokens.isEmpty()) return "ERROR: Consulta vacía.";
         String comando = tokens.get(0).toUpperCase();
-        enviarMensaje("Comando recibido: " + comando);
+        enviarMensaje("📨 Comando recibido: " + comando);
         switch (comando) {
             case "SUMMON":   return comandoSummon(tokens, user);
             case "UTILIZE":  return comandoUtilize(tokens, user);
@@ -41,9 +41,10 @@ public class GestorConsultas {
         }
     }
 
-    // NUEVO: Método para obtener esquemas jerárquicos
+    // Método para obtener esquemas jerárquicos
     public String obtenerEsquemasJerarquicos() {
         try {
+            enviarMensaje("📊 Solicitando esquemas jerárquicos...");
             CSVDatabaseManager db = new CSVDatabaseManager();
             List<String> bases = db.listarBases();
             Map<String, List<String>> esquemas = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
@@ -53,7 +54,6 @@ public class GestorConsultas {
                 esquemas.put(base, tablas);
             }
             
-            // Formato: base1{tabla1,tabla2};base2{tabla3,tabla4}
             StringBuilder sb = new StringBuilder();
             for (Map.Entry<String, List<String>> entry : esquemas.entrySet()) {
                 if (sb.length() > 0) sb.append(";");
@@ -62,8 +62,12 @@ public class GestorConsultas {
                 sb.append("}");
             }
             
-            return sb.toString();
+            String resultado = sb.toString();
+            enviarMensaje("✅ Esquemas obtenidos: " + (bases.size() + " bases, " + 
+                esquemas.values().stream().mapToInt(List::size).sum() + " tablas totales"));
+            return resultado;
         } catch (Exception e) {
+            enviarMensaje("❌ Error obteniendo esquemas: " + e.getMessage());
             return "ERROR: " + e.getMessage();
         }
     }
@@ -85,10 +89,12 @@ public class GestorConsultas {
         if (tokens.size() != 2) return "ERROR: Uso: MANIFEST DATABASES | MANIFEST TABLES";
         if ("DATABASES".equals(tokens.get(1))) {
             List<String> bases = db.listarBases();
+            enviarMensaje("📋 MANIFEST DATABASES: " + bases.size() + " bases encontradas");
             return bases.isEmpty() ? "No hay bases de datos." : "Bases: " + String.join(", ", bases);
         } else if ("TABLES".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
             List<String> tablas = db.listarTablas(user.getBaseActiva());
+            enviarMensaje("📋 MANIFEST TABLES en " + user.getBaseActiva() + ": " + tablas.size() + " tablas encontradas");
             return tablas.isEmpty() ? "No hay tablas en DB " + user.getBaseActiva()
                                     : "Tablas en " + user.getBaseActiva() + ": " + String.join(", ", tablas);
         }
@@ -99,7 +105,11 @@ public class GestorConsultas {
         if (tokens.size() != 2) return "ERROR: Uso: DEPICT <tabla>";
         if (user.getBaseActiva() == null) return "ERROR: No hay base activa.";
         CSVDatabaseManager db = new CSVDatabaseManager();
-        return db.describirTabla(user.getBaseActiva(), tokens.get(1));
+        String tabla = tokens.get(1);
+        enviarMensaje("🔍 DEPICT tabla: " + tabla + " en base: " + user.getBaseActiva());
+        String resultado = db.describirTabla(user.getBaseActiva(), tabla);
+        enviarMensaje("📄 Descripción: " + resultado);
+        return resultado;
     }
 
     private String comandoUtilize(List<String> tokens, User user) {
@@ -109,13 +119,14 @@ public class GestorConsultas {
         String base = tokens.get(1);
         File dbFile = new File(dbPath + base + ".csv");
         if (!dbFile.exists()) {
+            enviarMensaje("❌ UTILIZE falló: Base '" + base + "' no existe");
             return "ERROR: La base de datos '" + base + "' no existe.";
         }
         user.setBaseActiva(base);
-        enviarMensaje("Base activa cambiada a: " + base);
+        enviarMensaje("🎯 Base activa cambiada a: " + base + " para usuario: " + user.getUsername());
         
         if (notificacionCallback != null) {
-            notificacionCallback.accept("Usuario cambió base activa a: " + base);
+            notificacionCallback.accept("Usuario " + user.getUsername() + " cambió base activa a: " + base);
         }
         
         return "OK: Base de datos activa = " + base;
@@ -125,30 +136,35 @@ public class GestorConsultas {
         String msg;
         if (tokens.size() < 3) {
             msg = "ERROR: Sintaxis SUMMON inválida.";
+            enviarMensaje("❌ " + msg);
             return msg;
         }
         CSVDatabaseManager db = new CSVDatabaseManager();
         if ("DATABASE".equals(tokens.get(1))) {
             String nombreDB = tokens.get(2);
+            enviarMensaje("🏗️ SUMMON DATABASE: " + nombreDB + " por usuario: " + user.getUsername());
             boolean exito = db.crearDatabase(nombreDB);
             msg = exito ? "OK: Base de datos '" + nombreDB + "' creada."
                         : "ERROR: No se pudo crear la base de datos.";
-            enviarMensaje(msg);
+            enviarMensaje(exito ? "✅ " + msg : "❌ " + msg);
             
             if (exito && notificacionCallback != null) {
-                notificacionCallback.accept("Base de datos '" + nombreDB + "' creada por " + 
-                                           (user != null ? user.getUsername() : "sistema"));
+                notificacionCallback.accept("Base de datos '" + nombreDB + "' creada por " + user.getUsername());
             }
             
             return msg;
         }
         if ("TABLE".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) {
-                return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
+                msg = "ERROR: No hay base activa. Use UTILIZE <db> primero.";
+                enviarMensaje("❌ " + msg);
+                return msg;
             }
             File dbFile = new File(dbPath + user.getBaseActiva() + ".csv");
             if (!dbFile.exists()) {
-                return "ERROR: La base activa '" + user.getBaseActiva() + "' no existe.";
+                msg = "ERROR: La base activa '" + user.getBaseActiva() + "' no existe.";
+                enviarMensaje("❌ " + msg);
+                return msg;
             }
             String nombreTabla = tokens.get(2);
             List<String> atributos = new ArrayList<>();
@@ -156,10 +172,12 @@ public class GestorConsultas {
                 if ("}".equals(tokens.get(i))) break;
                 atributos.add(tokens.get(i));
             }
+            enviarMensaje("🏗️ SUMMON TABLE: " + nombreTabla + " en " + user.getBaseActiva() + 
+                         " con atributos: " + atributos + " por usuario: " + user.getUsername());
             boolean exito = db.crearTabla(user.getBaseActiva(), nombreTabla, atributos);
             msg = exito ? "OK: Tabla '" + nombreTabla + "' creada en DB " + user.getBaseActiva()
                         : "ERROR: No se pudo crear la tabla.";
-            enviarMensaje(msg);
+            enviarMensaje(exito ? "✅ " + msg : "❌ " + msg);
             
             if (exito && notificacionCallback != null) {
                 notificacionCallback.accept("Tabla '" + nombreTabla + "' creada en " + 
@@ -169,7 +187,7 @@ public class GestorConsultas {
             return msg;
         }
         msg = "ERROR: SUMMON debe ser DATABASE o TABLE.";
-        enviarMensaje(msg);
+        enviarMensaje("❌ " + msg);
         return msg;
     }
 
@@ -182,10 +200,14 @@ public class GestorConsultas {
         String dbName = user.getBaseActiva();
         String tableName = tokens.get(1);
         File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
-        if (!tablaFile.exists())
+        if (!tablaFile.exists()) {
+            enviarMensaje("❌ BRING falló: Tabla '" + tableName + "' no encontrada en " + dbName);
             return "ERROR: Tabla '" + tableName + "' no encontrada.";
+        }
 
         try {
+            enviarMensaje("🔍 BRING tabla: " + tableName + " de base: " + dbName + " por usuario: " + user.getUsername());
+            
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists())
                 return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
@@ -218,6 +240,9 @@ public class GestorConsultas {
                     columnasFiltradas.add(col.toUpperCase());
                     if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
                 }
+                enviarMensaje("🎯 Columnas filtradas: " + columnasFiltradas);
+            } else {
+                enviarMensaje("🎯 Todas las columnas: " + nombresColumnas);
             }
 
             boolean hayFiltro = !columnasFiltradas.isEmpty();
@@ -237,7 +262,7 @@ public class GestorConsultas {
 
             List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
             if (lineas.isEmpty()) {
-                enviarMensaje("(tabla vacía)");
+                enviarMensaje("📭 Tabla vacía");
                 return "(tabla vacía)";
             }
 
@@ -246,14 +271,15 @@ public class GestorConsultas {
             String header1 = "Tabla: " + tableName.toUpperCase() + " ";
             String header2 = String.join(" | ", indices.stream().map(nombresColumnas::get).toList());
             
-            enviarMensaje(header1);
-            enviarMensaje(header2);
-            enviarMensaje("||");
+            enviarMensaje("📋 " + header1);
+            enviarMensaje("📋 " + header2);
+            enviarMensaje("📋 ||");
 
             sb.append(header1).append("");
             sb.append(header2).append("");
             sb.append("||");
 
+            int filasProcesadas = 0;
             for (String linea : lineas) {
                 String[] valores = linea.split(",", -1);
                 List<String> seleccionados = new ArrayList<>();
@@ -264,15 +290,17 @@ public class GestorConsultas {
                         seleccionados.add("NULL");
                 }
                 String fila = String.join(" | ", seleccionados);
-                enviarMensaje(fila);
+                enviarMensaje("📝 " + fila);
                 sb.append(fila).append("\\");
+                filasProcesadas++;
             }
             
+            enviarMensaje("✅ BRING completado: " + filasProcesadas + " filas procesadas");
             return sb.toString();
 
         } catch (Exception e) {
             e.printStackTrace();
-            enviarMensaje("ERROR: No se pudo leer la tabla.");
+            enviarMensaje("❌ ERROR en BRING: No se pudo leer la tabla '" + tableName + "'");
             return "ERROR: No se pudo leer la tabla '" + tableName + "'.";
         }
     }
@@ -280,20 +308,20 @@ public class GestorConsultas {
     private String comandoBurn(List<String> tokens, User user) {
         if (tokens.size() < 3) {
             String msg = "ERROR: Sintaxis BURN inválida.";
-            enviarMensaje(msg);
+            enviarMensaje("❌ " + msg);
             return msg;
         }
         CSVDatabaseManager db = new CSVDatabaseManager();
         if ("DATABASE".equals(tokens.get(1))) {
             String dbName = tokens.get(2);
+            enviarMensaje("🔥 BURN DATABASE: " + dbName + " por usuario: " + user.getUsername());
             boolean exito = db.eliminarDatabase(dbName);
             String msg = exito ? "OK: Base de datos '" + dbName + "' eliminada."
                                : "ERROR: No se pudo eliminar la base de datos.";
-            enviarMensaje(msg);
+            enviarMensaje(exito ? "✅ " + msg : "❌ " + msg);
             
             if (exito && notificacionCallback != null) {
-                notificacionCallback.accept("Base de datos '" + dbName + "' eliminada por " + 
-                                           (user != null ? user.getUsername() : "sistema"));
+                notificacionCallback.accept("Base de datos '" + dbName + "' eliminada por " + user.getUsername());
             }
             
             return msg;
@@ -301,14 +329,15 @@ public class GestorConsultas {
         if ("TABLE".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) {
                 String msg = "ERROR: No hay base activa.";
-                enviarMensaje(msg);
+                enviarMensaje("❌ " + msg);
                 return msg;
             }
             String nombreTabla = tokens.get(2);
+            enviarMensaje("🔥 BURN TABLE: " + nombreTabla + " de " + user.getBaseActiva() + " por usuario: " + user.getUsername());
             boolean exito = db.eliminarTable(user.getBaseActiva(), nombreTabla);
             String msg = exito ? "OK: Tabla '" + nombreTabla + "' eliminada de DB '" + user.getBaseActiva() + "'."
                                : "ERROR: No se pudo eliminar la tabla.";
-            enviarMensaje(msg);
+            enviarMensaje(exito ? "✅ " + msg : "❌ " + msg);
             
             if (exito && notificacionCallback != null) {
                 notificacionCallback.accept("Tabla '" + nombreTabla + "' eliminada de " + 
@@ -358,6 +387,8 @@ public class GestorConsultas {
             if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
         }
 
+        enviarMensaje("📝 FILE insertando " + registros.size() + " registros en tabla '" + tabla + 
+                     "' de " + user.getBaseActiva() + " por usuario: " + user.getUsername());
         CSVDatabaseManager db = new CSVDatabaseManager();
         boolean ok = db.insertarRegistros(user.getBaseActiva(), tabla, columnas, registros);
         
@@ -366,8 +397,10 @@ public class GestorConsultas {
                                        user.getBaseActiva() + " por " + user.getUsername());
         }
         
-        return ok ? "OK: Registros insertados en " + tabla
+        String resultado = ok ? "OK: Registros insertados en " + tabla
                   : "ERROR: Fallo al insertar registros en " + tabla;
+        enviarMensaje(ok ? "✅ " + resultado : "❌ " + resultado);
+        return resultado;
     }
 
     private void enviarMensaje(String msg) {

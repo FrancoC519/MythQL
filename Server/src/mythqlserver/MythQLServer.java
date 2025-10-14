@@ -12,18 +12,32 @@ public class MythQLServer {
     private MythQLServerUI serverUI;
     private ServerSocket serverSocket;
     
-    // Lista de consumidores para notificaciones
-    private List<Consumer<String>> notificacionConsumers = new ArrayList<>();
-    private Map<String, ClientHandler> clientesConectados = new ConcurrentHashMap<>();
+    // Managers
+    private NotificationManager notificationManager;
+    private LoginManager loginManager;
+    private QueryProcessor queryProcessor;
 
     public MythQLServer(int port) {
         this.port = port;
         this.serverUI = null;
+        inicializarManagers();
     }
 
     public MythQLServer(MythQLServerUI ui, int port) {
         this.serverUI = ui;
         this.port = port;
+        inicializarManagers();
+    }
+
+    private void inicializarManagers() {
+        // Pasar el callback de logging a cada manager
+        Consumer<String> logCallback = this::logToUI;
+        
+        this.notificationManager = new NotificationManager(logCallback);
+        this.loginManager = new LoginManager(userStore, sesiones, logCallback);
+        this.queryProcessor = new QueryProcessor(sesiones, notificationManager, logCallback);
+        
+        log("Managers inicializados: Login, Query, Notification", java.awt.Color.GREEN);
     }
 
     public void start() {
@@ -35,16 +49,13 @@ public class MythQLServer {
                 Socket socket = serverSocket.accept();
                 log("Cliente conectado: " + socket.getInetAddress(), java.awt.Color.CYAN);
 
-                ClientHandler handler;
-                if (serverUI != null) {
-                    handler = new ClientHandler(socket, userStore, sesiones, serverUI::logMessage);
-                } else {
-                    handler = new ClientHandler(socket, userStore, sesiones);
-                }
-                
-                handler.setServer(this);
-                String clientId = socket.getInetAddress() + ":" + socket.getPort();
-                clientesConectados.put(clientId, handler);
+                SocketHandler handler = new SocketHandler(
+                    socket, 
+                    loginManager, 
+                    queryProcessor, 
+                    notificationManager,
+                    sesiones
+                );
 
                 new Thread(handler).start();
             }
@@ -67,36 +78,15 @@ public class MythQLServer {
         }
     }
 
-    // Métodos para notificaciones
-    public void suscribirANotificaciones(Consumer<String> consumer) {
-        notificacionConsumers.add(consumer);
-    }
-
-    public void desuscribirDeNotificaciones(Consumer<String> consumer) {
-        notificacionConsumers.remove(consumer);
-    }
-
-    public void broadcastNotificacion(String mensaje) {
-        log("Broadcasting: " + mensaje, java.awt.Color.ORANGE);
-        for (Consumer<String> consumer : new ArrayList<>(notificacionConsumers)) {
-            try {
-                consumer.accept(mensaje);
-            } catch (Exception e) {
-                desuscribirDeNotificaciones(consumer);
-            }
-        }
-    }
-
-    public void removerCliente(String clientId) {
-        clientesConectados.remove(clientId);
-    }
-
     private void log(String msg, java.awt.Color color) {
         if (serverUI != null) {
             serverUI.logMessage(msg, color);
         } else {
             System.out.println(msg);
         }
+    }
+    private void logToUI(String msg) {
+        log(msg, java.awt.Color.WHITE); // Color por defecto
     }
 
     public static void main(String[] args) {

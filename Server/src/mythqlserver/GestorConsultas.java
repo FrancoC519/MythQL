@@ -257,6 +257,7 @@ public class GestorConsultas {
             return "ERROR: No se pudo leer la tabla '" + tableName + "'.";
         }
     }
+
     
     private String comandoBurn(List<String> tokens, User user) {
         if (tokens.size() < 3) {

@@ -194,24 +194,22 @@ public class GestorConsultas {
     private String comandoBring(List<String> tokens, User user) {
         if (tokens.size() < 2)
             return "ERROR: Sintaxis BRING inválida. Uso: BRING <tabla> [ { columnas } ]";
+
         if (user.getBaseActiva() == null)
             return "ERROR: No hay base activa.";
 
         String dbName = user.getBaseActiva();
         String tableName = tokens.get(1);
         File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
-        if (!tablaFile.exists()) {
-            enviarMensaje("BRING falló: Tabla '" + tableName + "' no encontrada en " + dbName);
+        if (!tablaFile.exists())
             return "ERROR: Tabla '" + tableName + "' no encontrada.";
-        }
 
         try {
-            enviarMensaje("BRING tabla: " + tableName + " de base: " + dbName + " por usuario: " + user.getUsername());
-            
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists())
                 return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
 
+            // === Leer definición de tabla ===
             List<String> dbLines = java.nio.file.Files.readAllLines(dbFile.toPath());
             String definicion = null;
             for (String linea : dbLines) {
@@ -223,6 +221,7 @@ public class GestorConsultas {
             if (definicion == null)
                 return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
 
+            // === Extraer nombres de columnas ===
             Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
             Matcher m = defPat.matcher(definicion);
             List<String> nombresColumnas = new ArrayList<>();
@@ -232,75 +231,29 @@ public class GestorConsultas {
             if (nombresColumnas.isEmpty())
                 return "ERROR: No se pudieron extraer las columnas de la definición.";
 
-            List<String> columnasFiltradas = new ArrayList<>();
-            if (tokens.size() > 2 && "{".equals(tokens.get(2))) {
-                int i = 3;
-                while (i < tokens.size() && !"}".equals(tokens.get(i))) {
-                    String col = tokens.get(i++);
-                    columnasFiltradas.add(col.toUpperCase());
-                    if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
-                }
-                enviarMensaje("Columnas filtradas: " + columnasFiltradas);
-            } else {
-                enviarMensaje("Todas las columnas: " + nombresColumnas);
-            }
-
-            boolean hayFiltro = !columnasFiltradas.isEmpty();
-            List<Integer> indices = new ArrayList<>();
-
-            if (hayFiltro) {
-                for (String c : columnasFiltradas) {
-                    int idx = nombresColumnas.indexOf(c);
-                    if (idx != -1) indices.add(idx);
-                }
-                if (indices.isEmpty())
-                    return "ERROR: Ninguna de las columnas especificadas existe en la tabla.";
-            } else {
-                for (int i = 0; i < nombresColumnas.size(); i++)
-                    indices.add(i);
-            }
-
+            // === Leer registros ===
             List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
-            if (lineas.isEmpty()) {
-                enviarMensaje("Tabla vacía");
+            if (lineas.isEmpty())
                 return "(tabla vacía)";
-            }
 
+            // === Construir salida ===
             StringBuilder sb = new StringBuilder();
 
-            String header1 = "Tabla: " + tableName.toUpperCase() + " ";
-            String header2 = String.join(" | ", indices.stream().map(nombresColumnas::get).toList());
-            
-            enviarMensaje(header1);
-            enviarMensaje(header2);
-            enviarMensaje("||");
+            // Encabezado
+            String header = tableName.toUpperCase() + " " + String.join(" \\ ", nombresColumnas);
+            sb.append(header).append("||");
 
-            sb.append(header1).append("");
-            sb.append(header2).append("");
-            sb.append("||");
-
-            int filasProcesadas = 0;
+            // Registros
             for (String linea : lineas) {
                 String[] valores = linea.split(",", -1);
-                List<String> seleccionados = new ArrayList<>();
-                for (int idx : indices) {
-                    if (idx < valores.length)
-                        seleccionados.add(valores[idx]);
-                    else
-                        seleccionados.add("NULL");
-                }
-                String fila = String.join(" | ", seleccionados);
-                enviarMensaje(fila);
+                String fila = String.join(" | ", valores);
                 sb.append(fila).append("\\");
-                filasProcesadas++;
             }
-            
-            enviarMensaje("BRING completado: " + filasProcesadas + " filas procesadas");
+
             return sb.toString();
 
         } catch (Exception e) {
             e.printStackTrace();
-            enviarMensaje("ERROR en BRING: No se pudo leer la tabla '" + tableName + "'");
             return "ERROR: No se pudo leer la tabla '" + tableName + "'.";
         }
     }

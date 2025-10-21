@@ -18,6 +18,7 @@ import java.util.TreeMap;
 import javax.swing.Timer;
 import javax.swing.tree.*;
 import java.util.function.Consumer;
+import javax.swing.table.DefaultTableCellRenderer;
 
 public class MythQL_UI extends JFrame {
     private JTabbedPane tabs;
@@ -352,15 +353,19 @@ public class MythQL_UI extends JFrame {
                         if (respuestaServidor.startsWith("RESULT ERROR")) {
                             logMessage(respuestaServidor, Color.RED);
                         } else {
-                            logMessage(respuestaServidor, Color.GREEN);
-                            
-                            // Actualizar esquemas si fue un comando que cambia estructura
+                            if (comando.toUpperCase().startsWith("BRING")) {
+                                mostrarTablaBring(respuestaServidor);
+                            } else {
+                                logMessage(respuestaServidor, Color.GREEN);
+                            }
+
                             if (comando.toUpperCase().startsWith("SUMMON") || 
                                 comando.toUpperCase().startsWith("BURN") ||
                                 comando.toUpperCase().startsWith("UTILIZE")) {
                                 cargarEsquemasJerarquicos();
                             }
                         }
+
 
                         Thread.sleep(150);
 
@@ -584,6 +589,90 @@ public class MythQL_UI extends JFrame {
                 }
             }
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    private void mostrarTablaBring(String respuesta) {
+        try {
+            // Separar encabezado y datos
+            int indexDatos = respuesta.indexOf("||");
+            if (indexDatos == -1) {
+                JOptionPane.showMessageDialog(this, "Formato de BRING inválido.", "BRING", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Header
+            String headerLine = respuesta.substring(0, indexDatos).trim(); // ej: "MATERIA ID | NOMBRE"
+            String[] columnas = Arrays.stream(headerLine.split("\\|"))
+                                      .map(String::trim) // solo trim, no quitar comillas
+                                      .toArray(String[]::new);
+
+            // Nombre de la tabla (primer token del header antes de espacio o |
+            String nombreTabla = columnas[0].split(" ")[0];
+
+            // Registros
+            String registrosStr = respuesta.substring(indexDatos + 2); 
+            String[] registros = registrosStr.split("\\\\"); // separa registros
+
+            List<String[]> filas = new ArrayList<>();
+            for (String registro : registros) {
+                registro = registro.trim();
+                if (registro.isEmpty()) continue;
+
+                // Separar columnas por "|"
+                String[] valores = Arrays.stream(registro.split("\\|"))
+                                         .map(String::trim)
+                                         .toArray(String[]::new);
+
+                // Asegurarnos que la fila tenga la misma cantidad de columnas que el header
+                if (valores.length < columnas.length) {
+                    String[] tmp = new String[columnas.length];
+                    System.arraycopy(valores, 0, tmp, 0, valores.length);
+                    for (int i = valores.length; i < columnas.length; i++) tmp[i] = "NULL";
+                    valores = tmp;
+                }
+
+                filas.add(valores);
+            }
+
+            String[][] data = filas.toArray(new String[0][]);
+            JTable table = new JTable(data, columnas);
+            table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+            table.setRowHeight(24);
+            table.setFont(new Font("Monospaced", Font.PLAIN, 13));
+            table.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
+
+            // Zebra stripes
+            table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+                @Override
+                public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                               boolean hasFocus, int row, int column) {
+                    Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                    if (!isSelected) {
+                        c.setBackground(row % 2 == 0 ? new Color(245, 245, 245) : Color.WHITE);
+                    }
+                    return c;
+                }
+            });
+
+            JScrollPane scrollPane = new JScrollPane(table);
+            scrollPane.setPreferredSize(new Dimension(700, 400));
+
+            JDialog dialog = new JDialog(this, "Resultado BRING: " + nombreTabla, false);
+            dialog.setLayout(new BorderLayout(10, 10));
+            dialog.add(scrollPane, BorderLayout.CENTER);
+
+            JLabel lblTitulo = new JLabel("Tabla: " + nombreTabla, SwingConstants.CENTER);
+            lblTitulo.setFont(new Font("Arial Black", Font.BOLD, 16));
+            dialog.add(lblTitulo, BorderLayout.NORTH);
+
+            dialog.pack();
+            dialog.setLocationRelativeTo(this);
+            dialog.setVisible(true);
+
+        } catch (Exception e) {
+            logError("Error mostrando resultado de BRING: " + e.getMessage());
             e.printStackTrace();
         }
     }

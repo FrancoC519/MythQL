@@ -24,7 +24,6 @@ public class LockManager {
         }
     }
 
-    // Para bases completas (opcional)
     public static void bloquearBase(String base) {
         bloquearTabla("DB_" + base);
     }

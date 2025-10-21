@@ -28,7 +28,7 @@ public class GestorConsultas {
         List<String> tokens = tokenizar(consulta);
         if (tokens.isEmpty()) return "ERROR: Consulta vacía.";
         String comando = tokens.get(0).toUpperCase();
-        enviarMensaje("📨 Comando recibido: " + comando);
+        enviarMensaje("Comando recibido: " + comando);
         switch (comando) {
             case "SUMMON":   return comandoSummon(tokens, user);
             case "UTILIZE":  return comandoUtilize(tokens, user);

@@ -1525,6 +1525,7 @@ public class MythQL_UI extends JFrame {
         }
     }
 
+
     private abstract class SimpleDocumentListener implements DocumentListener {
         public abstract void update(DocumentEvent e);
         @Override

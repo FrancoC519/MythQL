@@ -1,6 +1,7 @@
 package mythqlserver;
+
 import java.io.*;
-import java.nio.file.Files;
+import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
 import java.util.stream.Collectors;
@@ -10,23 +11,30 @@ public class CSVDatabaseManager {
 
     // ===== CREAR BASE DE DATOS =====
     public boolean crearDatabase(String nombreDB) {
+        LockManager.bloquearBase(nombreDB);
         try {
             File carpeta = new File(dbPath);
             if (!carpeta.exists()) carpeta.mkdirs();
+
             File dbFile = new File(carpeta, nombreDB + ".csv");
             if (dbFile.exists()) return false;
             if (!dbFile.createNewFile()) return false;
+
             File tablasDir = new File(dbPath + nombreDB + "_tables");
             if (!tablasDir.exists()) tablasDir.mkdirs();
+
             return true;
         } catch (IOException e) {
             e.printStackTrace();
             return false;
+        } finally {
+            LockManager.desbloquearBase(nombreDB);
         }
     }
 
     // ===== CREAR TABLA =====
     public boolean crearTabla(String dbName, String nombreTabla, List<String> atributos) {
+        LockManager.bloquearTabla(nombreTabla);
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
@@ -38,50 +46,59 @@ public class CSVDatabaseManager {
             for (String linea : lineas) {
                 if (linea.trim().toUpperCase().startsWith("SELFSTACKABLES:")) {
                     selfBlockFound = true;
-                    // Insertamos la nueva tabla justo antes de SELFSTACKABLES
                     nuevasLineas.add(nombreTabla + ":" + String.join(" ", atributos));
                 }
                 nuevasLineas.add(linea);
             }
 
             if (!selfBlockFound) {
-                // No había SELFSTACKABLES, agregamos la tabla al final
                 nuevasLineas.add(nombreTabla + ":" + String.join(" ", atributos));
             }
 
             Files.write(dbFile.toPath(), nuevasLineas);
 
-            // Crear archivo físico de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + nombreTabla + ".csv");
             if (tablaFile.exists()) return false;
             return tablaFile.createNewFile();
-
         } catch (IOException e) {
             e.printStackTrace();
             return false;
+        } finally {
+            LockManager.desbloquearTabla(nombreTabla);
         }
     }
 
-
-    // ===== ELIMINAR DB / TABLA =====
+    // ===== ELIMINAR DB =====
     public boolean eliminarDatabase(String dbName) {
+        LockManager.bloquearBase(dbName);
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
+
             File tablasDir = new File(dbPath + dbName + "_tables");
             if (tablasDir.exists()) {
                 File[] tablas = tablasDir.listFiles();
-                if (tablas != null) for (File tabla : tablas) tabla.delete();
+                if (tablas != null) {
+                    for (File tabla : tablas) {
+                        LockManager.bloquearTabla(tabla.getName());
+                        tabla.delete();
+                        LockManager.desbloquearTabla(tabla.getName());
+                    }
+                }
                 tablasDir.delete();
             }
             return dbFile.delete();
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        } finally {
+            LockManager.desbloquearBase(dbName);
         }
     }
 
+    // ===== ELIMINAR TABLA =====
     public boolean eliminarTable(String dbName, String nombreTabla) {
+        LockManager.bloquearTabla(nombreTabla);
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
@@ -91,7 +108,6 @@ public class CSVDatabaseManager {
             Map<String, Integer> counters = new HashMap<>();
             boolean selfBlockStarted = false;
 
-            // Separar tablas y SELFSTACKABLES
             for (String linea : lineas) {
                 String trimmed = linea.trim();
                 if (trimmed.isEmpty()) continue;
@@ -111,12 +127,10 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // Filtrar la tabla a eliminar
             tablaLines = tablaLines.stream()
                     .filter(l -> !l.toUpperCase().startsWith(nombreTabla.toUpperCase() + ":"))
                     .collect(Collectors.toList());
 
-            // Filtrar SELFSTACKABLES de esa tabla
             String tablaUpper = nombreTabla.toUpperCase() + ".";
             Map<String, Integer> nuevosCounters = new HashMap<>();
             for (Map.Entry<String, Integer> e : counters.entrySet()) {
@@ -125,7 +139,6 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // Reescribir archivo
             List<String> nuevasLineas = new ArrayList<>();
             nuevasLineas.addAll(tablaLines);
             nuevasLineas.add("SELFSTACKABLES:");
@@ -135,18 +148,17 @@ public class CSVDatabaseManager {
 
             Files.write(dbFile.toPath(), nuevasLineas);
 
-            // Eliminar el archivo de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + nombreTabla + ".csv");
             if (tablaFile.exists()) tablaFile.delete();
 
             return true;
-
         } catch (IOException e) {
             e.printStackTrace();
             return false;
+        } finally {
+            LockManager.desbloquearTabla(nombreTabla);
         }
     }
-
 
     // ===== LISTADOS =====
     public List<String> listarBases() {
@@ -187,6 +199,7 @@ public class CSVDatabaseManager {
 
     // ===== INSERTAR REGISTROS =====
     public boolean insertarRegistros(String dbName, String tableName, List<String> columnas, List<List<String>> registros) {
+        LockManager.bloquearTabla(tableName);
         try {
             File dbMeta = new File(dbPath + dbName + ".csv");
             if (!dbMeta.exists()) return false;
@@ -194,9 +207,8 @@ public class CSVDatabaseManager {
             List<String> lineas = Files.readAllLines(dbMeta.toPath());
             Map<String, Integer> counters = new HashMap<>();
             List<String> tablaLines = new ArrayList<>();
-
-            // --- Separar tablas y SELFSTACKABLES ---
             boolean selfBlockStarted = false;
+
             for (String linea : lineas) {
                 String trimmed = linea.trim();
                 if (trimmed.isEmpty()) continue;
@@ -216,7 +228,6 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // --- Buscar definición de la tabla ---
             String definicion = null;
             for (String linea : tablaLines) {
                 if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
@@ -226,7 +237,6 @@ public class CSVDatabaseManager {
             }
             if (definicion == null) return false;
 
-            // --- Parsear definición ---
             Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?", Pattern.CASE_INSENSITIVE);
             Matcher m = defPat.matcher(definicion);
 
@@ -242,7 +252,6 @@ public class CSVDatabaseManager {
                 autoInc.add(m.group(5) != null);
             }
 
-            // --- Validar tipos antes de insertar ---
             for (List<String> registro : registros) {
                 if (registro.size() != columnas.size()) return false;
 
@@ -274,7 +283,6 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // --- Escribir en tabla ---
             File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
             if (!tablaFile.exists()) return false;
 
@@ -307,33 +315,22 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // --- Reescribir archivo DB: todas las tablas + SELFSTACKABLES al final ---
             List<String> nuevasLineas = new ArrayList<>();
-
-            // Agregar todas las líneas de tablas (antes de cualquier bloque SELFSTACKABLES)
             for (String linea : tablaLines) {
-                if (!linea.trim().isEmpty()) {
-                    nuevasLineas.add(linea);
-                }
+                if (!linea.trim().isEmpty()) nuevasLineas.add(linea);
             }
-
-            // Agregar el bloque SELFSTACKABLES al final
             nuevasLineas.add("SELFSTACKABLES:");
             for (Map.Entry<String, Integer> e : counters.entrySet()) {
                 nuevasLineas.add(e.getKey() + " = " + e.getValue());
             }
 
-            // Escribir de nuevo en el archivo
             Files.write(dbMeta.toPath(), nuevasLineas);
-
-
             return true;
-
         } catch (Exception e) {
             e.printStackTrace();
             return false;
+        } finally {
+            LockManager.desbloquearTabla(tableName);
         }
     }
-
-
 }

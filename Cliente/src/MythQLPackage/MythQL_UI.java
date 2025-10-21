@@ -1437,31 +1437,42 @@ public class MythQL_UI extends JFrame {
     
     private void mostrarTablaBring(String respuesta) {
         try {
+            // Separar encabezado y datos
             int indexDatos = respuesta.indexOf("||");
             if (indexDatos == -1) {
                 JOptionPane.showMessageDialog(this, "Formato de BRING inválido.", "BRING", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
+            // Header: ejemplo → "MATERIA ID \ NOMBRE"
             String headerLine = respuesta.substring(0, indexDatos).trim();
-            String[] columnas = Arrays.stream(headerLine.split("\\|"))
+
+            // Separar nombre de tabla del resto
+            String[] partesHeader = headerLine.split("\\s+", 2); // separa "MATERIA" de "ID \ NOMBRE"
+            String nombreTabla = partesHeader[0].trim();
+
+            // Separar columnas (después del nombre de la tabla)
+            String columnasStr = (partesHeader.length > 1) ? partesHeader[1] : "";
+            String[] columnas = Arrays.stream(columnasStr.split("\\\\"))
                                       .map(String::trim)
+                                      .filter(s -> !s.isEmpty())
                                       .toArray(String[]::new);
 
-            String nombreTabla = columnas[0].split(" ")[0];
-
-            String registrosStr = respuesta.substring(indexDatos + 2); 
-            String[] registros = registrosStr.split("\\\\");
+            // === Registros ===
+            String registrosStr = respuesta.substring(indexDatos + 2).trim();
+            String[] registros = registrosStr.split("\\\\"); // separa registros por '\'
 
             List<String[]> filas = new ArrayList<>();
             for (String registro : registros) {
                 registro = registro.trim();
                 if (registro.isEmpty()) continue;
 
+                // Separar valores por '|'
                 String[] valores = Arrays.stream(registro.split("\\|"))
                                          .map(String::trim)
                                          .toArray(String[]::new);
 
+                // Asegurar que tenga la cantidad correcta
                 if (valores.length < columnas.length) {
                     String[] tmp = new String[columnas.length];
                     System.arraycopy(valores, 0, tmp, 0, valores.length);
@@ -1473,12 +1484,14 @@ public class MythQL_UI extends JFrame {
             }
 
             String[][] data = filas.toArray(new String[0][]);
+
             JTable table = new JTable(data, columnas);
             table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
             table.setRowHeight(24);
             table.setFont(new Font("Monospaced", Font.PLAIN, 13));
             table.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
 
+            // Zebra stripes
             table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
                 @Override
                 public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,

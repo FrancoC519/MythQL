@@ -1460,7 +1460,7 @@ public class MythQL_UI extends JFrame {
 
             // Resetear color a normal
             SimpleAttributeSet normal = new SimpleAttributeSet();
-            StyleConstants.setForeground(normal, currentTheme.consoleFg);
+            StyleConstants.setForeground(normal, Color.BLACK);
             doc.setCharacterAttributes(0, doc.getLength(), normal, true);
 
             // Aplicar colores según categorías

@@ -3,10 +3,11 @@ topPanel=#6C2C78
 leftPanel=#F2F2F2
 bottomPanel=#F2F2F2
 consoleBg=#000000
-consoleFg=#FFFFFF
+consoleFg=#FFFFF
 
 # Colores de categorías de palabras clave
 keywordControl=#00FFFF
 keywordType=#FFB347
 keywordCommand=#0033FF
 keywordOther=#AAFFAA
+keywordSymbol=#FFA500

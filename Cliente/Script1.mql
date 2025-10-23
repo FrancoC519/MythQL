@@ -1,3 +1,7 @@
-UTILIZE Tienda;
-BRING Producto;
-BRING Empleado{Nombre, Apellido};
+SUMMON DATABASE MythQLDEVTEAM;
+UTILIZE MYTHQLDEVTEAM;
+SUMMON TABLE Employee{ID INT SELF STACKABLE, Name VARCHAR(25), LastName VARCHAR(25), ROL VARCHAR(25)};
+FILE Employee{Name, LastName, ROL}["Franco","Carnevali","BackEndDeveloper"],["Gabriel","Denuble","BackEndDevelepor"],["Martin","Blacha","FrontEndDeveloper"],["Benjamin","Moyano","FrontEndDeveloper"];
+DEPICT Employee;
+MANIFEST TABLES;
+BRING employee;

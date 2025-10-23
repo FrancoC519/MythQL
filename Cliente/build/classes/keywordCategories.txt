@@ -1,0 +1,5 @@
+# nombreCategoria=lista,de,palabras
+keywordCommand=SUMMON,BURN,BRING,UTILIZE,LOGOUT
+keywordType=INT,VARCHAR,STACKABLE
+keywordControl=FILE,MANIFEST,SELF,DATABASE,TABLE
+keywordOther=TABLES,DATABASES,DEPICT

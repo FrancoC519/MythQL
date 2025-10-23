@@ -1,0 +1,10 @@
+topPanel=#006633
+leftPanel=#C8FFC8
+bottomPanel=#C8FFC8
+consoleBg=#000000
+consoleFg=#FFFFFF
+
+keywordControl=#00FF99
+keywordType=#FFFF00
+keywordCommand=#33FFCC
+keywordOther=#99FF66

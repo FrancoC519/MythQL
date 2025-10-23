@@ -10,8 +10,12 @@ import java.nio.charset.StandardCharsets;
 import java.io.File;
 import java.net.URISyntaxException;
 import java.awt.Desktop;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -28,8 +32,11 @@ public class MythQL_UI extends JFrame {
     private String host;
     private int port;
     private String lastErrorMsg = "";
-    private Timer highlightTimer;
     
+    private Map<String, List<String>> categoriasKeywords = new LinkedHashMap<>();
+    private Timer highlightTimer;
+    private Theme currentTheme;
+    private final File themeFile = new File("current_theme.txt");
     // Conexiones separadas
     private ClienteNotificaciones clienteNotificaciones;
     private ClienteConexion clienteConsultas;
@@ -44,11 +51,29 @@ public class MythQL_UI extends JFrame {
         this.clienteConsultas = new ClienteConexion(host, port);
         initializeUI();
         
+        cargarCategoriasKeywords("/keywordCategories.txt");
         // Configurar notificaciones DESPUÉS de que la UI esté lista
         SwingUtilities.invokeLater(() -> {
             configurarNotificaciones();
             cargarEsquemasJerarquicos();
         });
+        
+        // Cargar tema default
+        try {
+            String savedTheme = "Oscuro";
+            if (themeFile.exists()) {
+                savedTheme = new String(java.nio.file.Files.readAllBytes(themeFile.toPath())).trim();
+            }
+            currentTheme = Theme.loadFromResource("/themes/" + savedTheme + ".theme");
+            aplicarTema(currentTheme);
+            logMessage("Tema cargado: " + savedTheme, Color.CYAN);
+        } catch (Exception e) {
+            logError("Error cargando tema inicial, usando Oscuro por defecto.");
+            try {
+                currentTheme = Theme.loadFromResource("/themes/Oscuro.theme");
+                aplicarTema(currentTheme);
+            } catch (Exception ignored) {}
+        }
     }
 
     private void initializeUI() {
@@ -1339,6 +1364,7 @@ public class MythQL_UI extends JFrame {
         dialog.setSize(350, 300);
         dialog.setLocationRelativeTo(this);
         dialog.setLayout(new BorderLayout(10, 10));
+        dialog.setResizable(false);
 
         JPanel previewPanel = new JPanel();
         previewPanel.setPreferredSize(new Dimension(300, 100));
@@ -1347,42 +1373,36 @@ public class MythQL_UI extends JFrame {
         JPanel buttonPanel = new JPanel(new GridLayout(0, 1, 10, 10));
         dialog.add(buttonPanel, BorderLayout.CENTER);
 
-        Object[][] temas = {
-                {"Oscuro", new Color(108, 44, 120), new Color(242, 242, 242), Color.BLACK, Color.WHITE},
-                {"Claro", new Color(230, 242, 255), Color.WHITE, Color.WHITE, Color.BLACK},
-                {"Verde", new Color(0, 102, 51), new Color(200, 255, 200), Color.BLACK, Color.WHITE},
-                {"Azul", new Color(0, 51, 102), new Color(200, 220, 255), Color.WHITE, Color.BLACK}
-        };
+        String[] temas = {"Oscuro", "Claro", "Verde", "Azul"};
 
-        for (Object[] tema : temas) {
-            String nombre = (String) tema[0];
-            Color topColor = (Color) tema[1];
-            Color leftColor = (Color) tema[2];
-            Color consoleBg = (Color) tema[3];
-            Color consoleFg = (Color) tema[4];
-
+        for (String nombre : temas) {
             JButton btnTema = new JButton(nombre);
+
             btnTema.addActionListener(e -> {
-                topPanel.setBackground(topColor);
-                leftPanel.setBackground(leftColor);
-                bottomPanel.setBackground(leftColor);
-                consolePane.setBackground(consoleBg);
-                consolePane.setForeground(consoleFg);
-                dialog.dispose();
-                logMessage("Tema cambiado a: " + nombre, Color.CYAN);
+                try {
+                    String path = "/themes/" + nombre + ".theme";
+                    Theme theme = Theme.loadFromResource(path);
+                    aplicarTema(theme);
+                    dialog.dispose();
+                    logMessage("Tema cambiado a: " + nombre, Color.CYAN);
+                } catch (Exception ex) {
+                    logError("Error cargando tema: " + ex.getMessage());
+                    ex.printStackTrace();
+                }
             });
 
             btnTema.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseEntered(MouseEvent e) {
-                    previewPanel.setBackground(topColor);
-                    previewPanel.setForeground(consoleFg);
+                    try {
+                        Theme theme = Theme.loadFromResource("/themes/" + nombre + ".theme");
+                        previewPanel.setBackground(theme.topPanel);
+                    } catch (Exception ignored) {}
                 }
 
                 @Override
                 public void mouseExited(MouseEvent e) {
                     previewPanel.setBackground(dialog.getBackground());
-                    previewPanel.setForeground(Color.BLACK);
                 }
             });
 
@@ -1392,46 +1412,92 @@ public class MythQL_UI extends JFrame {
         dialog.setVisible(true);
     }
 
+    private void aplicarTema(Theme theme) {
+        topPanel.setBackground(theme.topPanel);
+        leftPanel.setBackground(theme.leftPanel);
+        bottomPanel.setBackground(theme.bottomPanel);
+        consolePane.setBackground(theme.consoleBg);
+        consolePane.setForeground(theme.consoleFg);
+
+        this.currentTheme = theme;
+    }
+    
+    private void cargarCategoriasKeywords(String resourcePath) {
+        categoriasKeywords.clear();
+        try (InputStream input = getClass().getResourceAsStream(resourcePath)) {
+            if (input == null) {
+                logError("No se encontró el archivo de categorías: " + resourcePath);
+                return;
+            }
+            BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+            String linea;
+            while ((linea = reader.readLine()) != null) {
+                linea = linea.trim();
+                if (linea.isEmpty() || linea.startsWith("#")) continue;
+
+                String[] partes = linea.split("=");
+                if (partes.length != 2) continue;
+
+                String categoria = partes[0].trim();
+                String[] palabras = partes[1].split(",");
+                List<String> lista = new ArrayList<>();
+                for (String p : palabras) lista.add(p.trim().toUpperCase());
+
+                categoriasKeywords.put(categoria, lista);
+            }
+
+            logMessage("Categorías de keywords cargadas correctamente.", Color.CYAN);
+        } catch (Exception e) {
+            logError("Error cargando categorías de keywords: " + e.getMessage());
+        }
+    }
+    
     private void resaltarKeywordsCompleto(JTextPane pane) {
         StyledDocument doc = pane.getStyledDocument();
         try {
             String text = doc.getText(0, doc.getLength());
-            
+            String upperText = text.toUpperCase();
+
+            // Resetear color a normal
             SimpleAttributeSet normal = new SimpleAttributeSet();
-            StyleConstants.setForeground(normal, Color.BLACK);
+            StyleConstants.setForeground(normal, currentTheme.consoleFg);
             doc.setCharacterAttributes(0, doc.getLength(), normal, true);
 
-            List<String> keywords = Arrays.asList("FILE","SUMMON", "DATABASE", "TABLE", "BURN", "BRING", "UTILIZE", "LOGOUT","TABLES","INT","VARCHAR","MANIFEST","DATABASES","DEPICT","SELF","STACKABLE");
-            String upperText = text.toUpperCase();
-            
-            for (String kw : keywords) {
-                int index = 0;
-                while ((index = upperText.indexOf(kw, index)) >= 0) {
-                    boolean isWord = true;
-                    if (index > 0) {
-                        char before = upperText.charAt(index - 1);
-                        if (Character.isLetterOrDigit(before) || before == '_') {
-                            isWord = false;
+            // Aplicar colores según categorías
+            for (Map.Entry<String, List<String>> entry : categoriasKeywords.entrySet()) {
+                String categoria = entry.getKey();
+                List<String> palabras = entry.getValue();
+
+                Color color = currentTheme.keywordColors.getOrDefault(categoria, Color.BLUE);
+                SimpleAttributeSet attr = new SimpleAttributeSet();
+                StyleConstants.setForeground(attr, color);
+                StyleConstants.setBold(attr, true);
+
+                for (String kw : palabras) {
+                    int index = 0;
+                    while ((index = upperText.indexOf(kw, index)) >= 0) {
+                        boolean isWord = true;
+                        if (index > 0) {
+                            char before = upperText.charAt(index - 1);
+                            if (Character.isLetterOrDigit(before) || before == '_') {
+                                isWord = false;
+                            }
                         }
-                    }
-                    if (isWord && index + kw.length() < upperText.length()) {
-                        char after = upperText.charAt(index + kw.length());
-                        if (Character.isLetterOrDigit(after) || after == '_') {
-                            isWord = false;
+                        if (isWord && index + kw.length() < upperText.length()) {
+                            char after = upperText.charAt(index + kw.length());
+                            if (Character.isLetterOrDigit(after) || after == '_') {
+                                isWord = false;
+                            }
                         }
+                        if (isWord) {
+                            doc.setCharacterAttributes(index, kw.length(), attr, false);
+                        }
+                        index += kw.length();
                     }
-                    
-                    if (isWord) {
-                        SimpleAttributeSet attr = new SimpleAttributeSet();
-                        StyleConstants.setForeground(attr, Color.BLUE);
-                        StyleConstants.setBold(attr, true);
-                        doc.setCharacterAttributes(index, kw.length(), attr, false);
-                    }
-                    index += kw.length();
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            logError("Error resaltando keywords: " + e.getMessage());
         }
     }
     

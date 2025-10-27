@@ -333,4 +333,215 @@ public class CSVDatabaseManager {
             LockManager.desbloquearTabla(tableName);
         }
     }
+    
+    // === MORPH ===
+    public boolean morphTable(String dbName, String tableName, List<String> columnasCompletas) {
+        LockManager.bloquearTabla(tableName);
+        try {
+            File dbFile = new File(dbPath + dbName + ".csv");
+            if (!dbFile.exists()) return false;
+
+            List<String> lineas = Files.readAllLines(dbFile.toPath());
+            List<String> nuevasLineas = new ArrayList<>();
+            boolean tablaReescrita = false;
+
+            for (String linea : lineas) {
+                String trimmed = linea.trim();
+
+                // Mantener todo hasta SELFSTACKABLES
+                if (trimmed.equalsIgnoreCase("SELFSTACKABLES:")) {
+                    break;
+                }
+
+                // Detectar la tabla a reescribir
+                if (trimmed.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                    String columnasFormateadas = formatearColumnas(columnasCompletas);
+                    String nuevaLinea = tableName.toUpperCase() + ":" + columnasFormateadas;
+                    nuevasLineas.add(nuevaLinea);
+                    tablaReescrita = true;
+                } else {
+                    nuevasLineas.add(linea);
+                }
+            }
+
+            // Agregar bloque SELFSTACKABLES y resto
+            boolean selfBlockAgregado = false;
+            for (String linea : lineas) {
+                if (linea.trim().equalsIgnoreCase("SELFSTACKABLES:")) {
+                    nuevasLineas.add("SELFSTACKABLES:");
+                    selfBlockAgregado = true;
+                } else if (selfBlockAgregado) {
+                    nuevasLineas.add(linea);
+                }
+            }
+
+            // Si la tabla no existía antes, insertarla antes de SELFSTACKABLES
+            if (!tablaReescrita) {
+                String columnasFormateadas = formatearColumnas(columnasCompletas);
+                int indexSelf = nuevasLineas.indexOf("SELFSTACKABLES:");
+                if (indexSelf == -1) {
+                    nuevasLineas.add(tableName.toUpperCase() + ":" + columnasFormateadas);
+                } else {
+                    nuevasLineas.add(indexSelf, tableName.toUpperCase() + ":" + columnasFormateadas);
+                }
+            }
+
+            // Limpiar contenido de tabla física
+            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+            if (tablaFile.exists()) new PrintWriter(tablaFile).close();
+            else tablaFile.createNewFile();
+
+            Files.write(dbFile.toPath(), nuevasLineas);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            LockManager.desbloquearTabla(tableName);
+        }
+    }
+
+    // === Formatear columnas correctamente ===
+    private String formatearColumnas(List<String> columnasCompletas) {
+        StringBuilder resultado = new StringBuilder();
+        int i = 0;
+        while (i < columnasCompletas.size()) {
+            String nombre = columnasCompletas.get(i++).toUpperCase();
+            if (i >= columnasCompletas.size()) break;
+
+            String tipo = columnasCompletas.get(i++).toUpperCase();
+            String detalle = "";
+
+            // Detectar tamaño de VARCHAR
+            if ("VARCHAR".equals(tipo) && i < columnasCompletas.size() && columnasCompletas.get(i).equals("(")) {
+                i++; // saltar '('
+                if (i < columnasCompletas.size()) {
+                    detalle = "(" + columnasCompletas.get(i++);
+                    if (i < columnasCompletas.size() && columnasCompletas.get(i).equals(")")) {
+                        detalle += ")";
+                        i++;
+                    }
+                }
+            }
+
+            // Detectar atributos opcionales (ej: SELF STACKABLE)
+            StringBuilder atributos = new StringBuilder();
+            while (i + 1 < columnasCompletas.size() &&
+                   "SELF".equals(columnasCompletas.get(i)) &&
+                   "STACKABLE".equals(columnasCompletas.get(i + 1))) {
+                if (atributos.length() > 0) atributos.append(" ");
+                atributos.append("SELF STACKABLE");
+                i += 2;
+            }
+
+            // Agregar al resultado
+            if (resultado.length() > 0) resultado.append(", ");
+            resultado.append(nombre).append(" ").append(tipo).append(detalle);
+            if (atributos.length() > 0) resultado.append(" ").append(atributos);
+        }
+
+        return resultado.toString();
+    }
+
+    // === SWEEP ===
+    public boolean vaciarTabla(String dbName, String tableName) {
+        LockManager.bloquearTabla(tableName);
+        try {
+            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+            if (!tablaFile.exists()) return false;
+            new PrintWriter(tablaFile).close(); // vaciar contenido
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            LockManager.desbloquearTabla(tableName);
+        }
+    }
+
+    // ===== REWRITE REGISTROS =====
+    public boolean rewriteRegistros(String dbName, String tableName, List<String> columnasObjetivo, List<String> nuevosValores,
+                                    String columnaCond, String valorCond) {
+        LockManager.bloquearTabla(tableName);
+        try {
+            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+            if (!tablaFile.exists()) return false;
+
+            // Leer líneas
+            List<String> lineas = Files.readAllLines(tablaFile.toPath());
+            if (lineas.isEmpty()) return false;
+
+            // Leer definición de columnas desde el archivo de metadatos
+            File dbMeta = new File(dbPath + dbName + ".csv");
+            if (!dbMeta.exists()) return false;
+
+            String definicion = null;
+            for (String linea : Files.readAllLines(dbMeta.toPath())) {
+                if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                    definicion = linea.substring(linea.indexOf(":") + 1).trim();
+                    break;
+                }
+            }
+            if (definicion == null) return false;
+
+            // Extraer nombres de columnas
+            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
+            Matcher m = defPat.matcher(definicion);
+            List<String> nombresColumnas = new ArrayList<>();
+            while (m.find()) {
+                nombresColumnas.add(m.group(1).toUpperCase());
+            }
+
+            int idxCond = nombresColumnas.indexOf(columnaCond.toUpperCase());
+            if (idxCond == -1) {
+                System.err.println("Columna de condición no encontrada: " + columnaCond);
+                return false;
+            }
+
+            // Limpiar comillas del valorCond si las tiene
+            String valCondLimpio = valorCond.replaceAll("^\"|\"$", "");
+
+            // Crear nuevas líneas
+            List<String> nuevasLineas = new ArrayList<>();
+            boolean huboCambios = false;
+
+            for (String linea : lineas) {
+                String[] valores = linea.split(",", -1);
+                if (valores.length != nombresColumnas.size()) {
+                    nuevasLineas.add(linea);
+                    continue;
+                }
+
+                String valorActualCond = valores[idxCond].replaceAll("^\"|\"$", "");
+
+                if (valorActualCond.equalsIgnoreCase(valCondLimpio)) {
+                    // Coincidencia → actualizar columnas objetivo
+                    for (int j = 0; j < columnasObjetivo.size(); j++) {
+                        String col = columnasObjetivo.get(j).toUpperCase();
+                        int idx = nombresColumnas.indexOf(col);
+                        if (idx != -1 && j < nuevosValores.size()) {
+                            String nuevo = nuevosValores.get(j);
+                            if (!nuevo.startsWith("\"") && !nuevo.matches("-?\\d+")) {
+                                nuevo = "\"" + nuevo.replace("\"", "") + "\"";
+                            }
+                            valores[idx] = nuevo;
+                        }
+                    }
+                    huboCambios = true;
+                }
+
+                nuevasLineas.add(String.join(",", valores));
+            }
+
+            if (huboCambios) {
+                Files.write(tablaFile.toPath(), nuevasLineas);
+            }
+
+            return huboCambios;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        } finally {
+            LockManager.desbloquearTabla(tableName);
+        }
+    }
 }

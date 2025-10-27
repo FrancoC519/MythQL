@@ -32,6 +32,9 @@ public class GestorSintaxis {
             case "MANIFEST": return comandoManifest(tokens);
             case "DEPICT":   return comandoDepict(tokens);
             case "FILE":     return comandoFile(tokens);
+            case "SWEEP":    return comandoSweep(tokens);
+            case "MORPH":    return comandoMorph(tokens);
+            case "REWRITE":  return comandoRewrite(tokens);
             default:
                 System.out.println("Comando desconocido: " + comando);
                 return false;
@@ -251,6 +254,105 @@ public class GestorSintaxis {
         }
 
         System.out.println("Comando FILE válido sobre tabla " + nombreTabla + " con columnas " + columnas);
+        return true;
+    }
+    
+    // ========== SWEEP ==========
+    public Boolean comandoSweep(List<String> tokens) {
+        if (tokens.size() != 2)
+            return error("Sintaxis incorrecta. Uso: SWEEP <tabla>");
+        String tabla = tokens.get(1);
+        if (!tabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido: " + tabla);
+        System.out.println("SWEEP → Tabla: " + tabla);
+        return true;
+    }
+
+    // ========== MORPH ==========
+    public Boolean comandoMorph(List<String> tokens) {
+        if (tokens.size() < 5)
+            return error("Sintaxis incorrecta. Uso: MORPH <tabla>{<columna tipo [SELF STACKABLE]>...}");
+
+        int i = 1;
+        String tabla = tokens.get(i++);
+        if (!tabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido: " + tabla);
+
+        if (!"{".equals(tokens.get(i++))) return error("Falta '{' tras el nombre de la tabla");
+
+        while (i < tokens.size()) {
+            if ("}".equals(tokens.get(i))) return true;
+            String col = tokens.get(i++);
+            if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
+                return error("Nombre de columna inválido: " + col);
+
+            if (i >= tokens.size()) return error("Falta tipo de columna para " + col);
+            String tipo = tokens.get(i++);
+            if (!tipo.matches("INT|VARCHAR"))
+                return error("Tipo no válido en MORPH: " + tipo);
+
+            // VARCHAR con tamaño
+            if ("VARCHAR".equals(tipo)) {
+                if (!"(".equals(tokens.get(i++))) return error("Falta '(' en VARCHAR");
+                String size = tokens.get(i++);
+                if (!size.matches("\\d+")) return error("Tamaño de VARCHAR inválido: " + size);
+                if (!")".equals(tokens.get(i++))) return error("Falta ')' en VARCHAR");
+            }
+
+            // Atributos opcionales
+            if (i + 1 < tokens.size() &&
+                "SELF".equals(tokens.get(i)) &&
+                "STACKABLE".equals(tokens.get(i + 1))) {
+                System.out.println("Columna con atributo SELF STACKABLE: " + col);
+                i += 2;
+            }
+
+            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+        }
+
+        return error("Falta '}' de cierre en MORPH");
+    }
+
+    // ========== REWRITE ==========
+    public Boolean comandoRewrite(List<String> tokens) {
+        // Ejemplo: REWRITE INVOICES {COL2} [5] IN WHICH {COL1} EQUALS [1];
+        int i = 1;
+        if (tokens.size() < 10)
+            return error("Sintaxis incorrecta. Uso: REWRITE <tabla>{col} [valor] IN WHICH {col} EQUALS [valor]");
+
+        String tabla = tokens.get(i++);
+        if (!tabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de tabla inválido");
+
+        if (!"{".equals(tokens.get(i++))) return error("Falta '{' tras el nombre de tabla.");
+        String colObjetivo = tokens.get(i++);
+        if (!colObjetivo.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de columna inválido en REWRITE.");
+        if (!"}".equals(tokens.get(i++))) return error("Falta '}' tras el nombre de columna objetivo.");
+
+        if (!"[".equals(tokens.get(i++))) return error("Falta '[' para valor nuevo.");
+        String nuevoValor = tokens.get(i++);
+        if (!"]".equals(tokens.get(i++))) return error("Falta ']' tras valor nuevo.");
+
+        if (!"IN".equals(tokens.get(i++)) || !"WHICH".equals(tokens.get(i++)))
+            return error("Falta 'IN WHICH' en la cláusula.");
+
+        if (!"{".equals(tokens.get(i++))) return error("Falta '{' en condición WHERE.");
+        String colCondicion = tokens.get(i++);
+        if (!colCondicion.matches("[A-Za-z_][A-Za-z0-9_]*"))
+            return error("Nombre de columna inválido en condición.");
+        if (!"}".equals(tokens.get(i++))) return error("Falta '}' tras columna de condición.");
+
+        if (!"EQUALS".equals(tokens.get(i++)))
+            return error("Falta palabra clave EQUALS en condición.");
+
+        if (!"[".equals(tokens.get(i++))) return error("Falta '[' para valor de comparación.");
+        String valorCond = tokens.get(i++);
+        if (!"]".equals(tokens.get(i++))) return error("Falta ']' tras valor de comparación.");
+
+        System.out.println("REWRITE válido sobre tabla " + tabla +
+                " SET " + colObjetivo + "=" + nuevoValor +
+                " WHERE " + colCondicion + "=" + valorCond);
         return true;
     }
 

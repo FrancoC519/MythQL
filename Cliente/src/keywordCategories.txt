@@ -1,6 +1,6 @@
 # nombreCategoria=lista,de,palabras
-keywordCommand=SUMMON,BURN,BRING,UTILIZE,LOGOUT
+keywordCommand=SUMMON,BURN,BRING,UTILIZE,LOGOUT,MORPH
 keywordType=INT,VARCHAR,STACKABLE
-keywordControl=FILE,MANIFEST,SELF,DATABASE,TABLE
-keywordOther=TABLES,DATABASES,DEPICT
+keywordControl=FILE,MANIFEST,SELF,DATABASE,TABLE,REWRITE,SWEEP
+keywordOther=TABLES,DATABASES,DEPICT,IN,WHICH
 keywordSymbol={,},(,),;,=,>,<,&&,||

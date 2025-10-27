@@ -30,14 +30,17 @@ public class GestorConsultas {
         String comando = tokens.get(0).toUpperCase();
         enviarMensaje("Comando recibido: " + comando);
         switch (comando) {
-            case "SUMMON":   return comandoSummon(tokens, user);
-            case "UTILIZE":  return comandoUtilize(tokens, user);
-            case "BRING":    return comandoBring(tokens, user);
-            case "BURN":     return comandoBurn(tokens, user);
+            case "SUMMON": return comandoSummon(tokens, user);
+            case "UTILIZE": return comandoUtilize(tokens, user);
+            case "BRING": return comandoBring(tokens, user);
+            case "BURN": return comandoBurn(tokens, user);
+            case "FILE": return comandoFile(tokens, user);
             case "MANIFEST": return comandoManifest(tokens, user);
-            case "DEPICT":   return comandoDepict(tokens, user);
-            case "FILE":     return comandoFile(tokens, user);
-            default:         return "ERROR: Comando desconocido '" + comando + "'";
+            case "DEPICT": return comandoDepict(tokens, user);
+            case "MORPH": return comandoMorph(tokens, user);
+            case "SWEEP": return comandoSweep(tokens, user);
+            case "REWRITE": return comandoRewrite(tokens, user);
+            default: return "ERROR: Comando desconocido '" + comando + "'";
         }
     }
 
@@ -356,7 +359,104 @@ public class GestorConsultas {
         enviarMensaje(ok ? resultado : resultado);
         return resultado;
     }
+    
+    // ===== COMANDO MORPH =====
+    private String comandoMorph(List<String> tokens, User user) {
+        if (user.getBaseActiva() == null)
+            return "ERROR: No hay base activa.";
+        if (tokens.size() < 4)
+            return "ERROR: Sintaxis MORPH inválida. Uso: MORPH <tabla>{columna tipo,...}";
 
+        String tabla = tokens.get(1);
+        List<String> atributos = new ArrayList<>();
+        int i = 3;
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            atributos.add(tokens.get(i++));
+            if (",".equals(tokens.get(i))) i++;
+        }
+
+        CSVDatabaseManager db = new CSVDatabaseManager();
+        boolean ok = db.morphTable(user.getBaseActiva(), tabla, atributos);
+        enviarMensaje("MORPH tabla " + tabla + " => " + atributos);
+        return ok ? "OK: Tabla '" + tabla + "' modificada."
+                  : "ERROR: Fallo al modificar tabla '" + tabla + "'.";
+    }
+
+    // ===== COMANDO SWEEP =====
+    private String comandoSweep(List<String> tokens, User user) {
+        if (user.getBaseActiva() == null)
+            return "ERROR: No hay base activa.";
+        if (tokens.size() != 2)
+            return "ERROR: Uso: SWEEP <tabla>";
+
+        String tabla = tokens.get(1);
+        CSVDatabaseManager db = new CSVDatabaseManager();
+        boolean ok = db.vaciarTabla(user.getBaseActiva(), tabla);
+        enviarMensaje("SWEEP tabla " + tabla + " en " + user.getBaseActiva());
+        return ok ? "OK: Tabla '" + tabla + "' limpiada."
+                  : "ERROR: No se pudo limpiar tabla '" + tabla + "'.";
+    }
+
+    // ===== COMANDO REWRITE =====
+    private String comandoRewrite(List<String> tokens, User user) {
+        if (user.getBaseActiva() == null)
+            return "ERROR: No hay base activa.";
+
+        try {
+            String tabla = tokens.get(1);
+            int i = 2;
+
+            if (!"{".equals(tokens.get(i++)))
+                return "ERROR: Falta '{' tras el nombre de tabla.";
+
+            List<String> columnas = new ArrayList<>();
+            while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+                columnas.add(tokens.get(i++));
+                if (",".equals(tokens.get(i))) i++;
+            }
+            i++; // cerrar }
+
+            if (!"[".equals(tokens.get(i++)))
+                return "ERROR: Falta '[' tras columnas.";
+
+            List<String> valores = new ArrayList<>();
+            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                valores.add(tokens.get(i++));
+                if (",".equals(tokens.get(i))) i++;
+            }
+            i++; // cerrar ]
+
+            if (i >= tokens.size() || !"IN".equals(tokens.get(i++)) || !"WHICH".equals(tokens.get(i++)))
+                return "ERROR: Falta cláusula IN WHICH.";
+
+            if (!"{".equals(tokens.get(i++)))
+                return "ERROR: Falta '{' en condición.";
+
+            String colCond = tokens.get(i++);
+            if (!"}".equals(tokens.get(i++)))
+                return "ERROR: Falta '}' tras condición.";
+
+            if (!"EQUALS".equals(tokens.get(i++)))
+                return "ERROR: Falta palabra clave EQUALS.";
+
+            if (!"[".equals(tokens.get(i++)))
+                return "ERROR: Falta '[' en valor condición.";
+
+            String valCond = tokens.get(i++);
+            if (!"]".equals(tokens.get(i++)))
+                return "ERROR: Falta ']' en valor condición.";
+
+            CSVDatabaseManager db = new CSVDatabaseManager();
+            boolean ok = db.rewriteRegistros(user.getBaseActiva(), tabla, columnas, valores, colCond, valCond);
+            enviarMensaje("REWRITE tabla " + tabla + " set " + columnas + "=" + valores + " where " + colCond + "=" + valCond);
+            return ok ? "OK: Registros actualizados." : "ERROR: No se pudieron actualizar registros.";
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "ERROR: Fallo de sintaxis en REWRITE.";
+        }
+    }
+    
     private void enviarMensaje(String msg) {
         if (messageCallback != null) {
             messageCallback.accept(msg);

@@ -14,6 +14,8 @@
 
 [UML Holy Grail](https://www.uml-diagrams.org/)
 
+[CLASS VIEW DUE TO ERRORS](https://drive.google.com/file/d/1GogW3zexchCZ6TRplpOIHG5AMMqlj2ld/view)
+
 ---
 # Tutorial de Git
 

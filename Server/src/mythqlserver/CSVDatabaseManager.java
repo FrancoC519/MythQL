@@ -237,7 +237,8 @@ public class CSVDatabaseManager {
             }
             if (definicion == null) return false;
 
-            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?", Pattern.CASE_INSENSITIVE);
+            // Ahora soporta INT, VARCHAR, FLOAT, BOOL, DATE
+            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR|FLOAT|BOOL|DATE)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?", Pattern.CASE_INSENSITIVE);
             Matcher m = defPat.matcher(definicion);
 
             List<String> nombres = new ArrayList<>();
@@ -252,6 +253,7 @@ public class CSVDatabaseManager {
                 autoInc.add(m.group(5) != null);
             }
 
+            // Validar los registros
             for (List<String> registro : registros) {
                 if (registro.size() != columnas.size()) return false;
 
@@ -264,25 +266,53 @@ public class CSVDatabaseManager {
                     Integer maxLen = longitudes.get(idx);
                     String valor = registro.get(i);
 
-                    if (tipo.equals("INT")) {
-                        if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+")) {
-                            System.err.println("ERROR: Valor no entero en columna " + col);
-                            return false;
-                        }
-                    } else if (tipo.equals("VARCHAR")) {
-                        if (!valor.startsWith("\"") || !valor.endsWith("\"")) {
-                            System.err.println("ERROR: VARCHAR sin comillas en columna " + col);
-                            return false;
-                        }
-                        String contenido = valor.substring(1, valor.length() - 1);
-                        if (maxLen != null && contenido.length() > maxLen) {
-                            System.err.println("ERROR: VARCHAR demasiado largo en columna " + col);
-                            return false;
-                        }
+                    switch (tipo) {
+                        case "INT":
+                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+")) {
+                                System.err.println("ERROR: Valor no entero en columna " + col);
+                                return false;
+                            }
+                            break;
+
+                        case "FLOAT":
+                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+(\\.\\d+)?")) {
+                                System.err.println("ERROR: Valor no flotante en columna " + col);
+                                return false;
+                            }
+                            break;
+
+                        case "VARCHAR":
+                            if (!valor.startsWith("\"") || !valor.endsWith("\"")) {
+                                System.err.println("ERROR: VARCHAR sin comillas en columna " + col);
+                                return false;
+                            }
+                            String contenido = valor.substring(1, valor.length() - 1);
+                            if (maxLen != null && contenido.length() > maxLen) {
+                                System.err.println("ERROR: VARCHAR demasiado largo en columna " + col);
+                                return false;
+                            }
+                            break;
+
+                        case "BOOL":
+                            if (!valor.equalsIgnoreCase("TRUE") && !valor.equalsIgnoreCase("FALSE")
+                                    && !valor.equals("1") && !valor.equals("0")) {
+                                System.err.println("ERROR: Valor no booleano en columna " + col + " (" + valor + ")");
+                                return false;
+                            }
+                            break;
+
+                        case "DATE":
+                            // Validación formato japonés: YYYY年MM月DD日
+                            if (!valor.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
+                                System.err.println("ERROR: Fecha inválida (debe ser YYYY-MM-DD) en columna " + col);
+                                return false;
+                            }
+                            break;
                     }
                 }
             }
 
+            // Escritura en archivo de tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
             if (!tablaFile.exists()) return false;
 
@@ -308,6 +338,7 @@ public class CSVDatabaseManager {
                                 valor = "NULL";
                             }
                         }
+
                         sb.append(valor);
                         if (j < nombres.size() - 1) sb.append(",");
                     }
@@ -315,6 +346,7 @@ public class CSVDatabaseManager {
                 }
             }
 
+            // Actualizar contadores
             List<String> nuevasLineas = new ArrayList<>();
             for (String linea : tablaLines) {
                 if (!linea.trim().isEmpty()) nuevasLineas.add(linea);
@@ -333,6 +365,7 @@ public class CSVDatabaseManager {
             LockManager.desbloquearTabla(tableName);
         }
     }
+
     
     // === MORPH ===
     public boolean morphTable(String dbName, String tableName, List<String> columnasCompletas) {

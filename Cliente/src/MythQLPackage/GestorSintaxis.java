@@ -40,17 +40,30 @@ public class GestorSintaxis {
                 return false;
         }
     }
-    // ========== TOKENIZADOR NUEVO ==========
+    
+    // ========== NUEVO TOKENIZADOR NUEVO ==========
     private List<String> tokenizar(String consulta) {
         List<String> tokens = new ArrayList<>();
+
         Pattern pattern = Pattern.compile(
-            "'[^']*'|\"[^\"]*\"|\\d+\\.\\d+|\\d+|[A-Za-z_][A-Za-z0-9_]*|[{}\\[\\](),;]"
+            // 1️⃣ Fechas tipo YYYY-MM-DD
+            "\\d{4}-\\d{2}-\\d{2}" +
+            // 2️⃣ O strings entre comillas simples o dobles
+            "|'[^']*'|\"[^\"]*\"" +
+            // 3️⃣ Números con o sin decimales
+            "|\\d+\\.\\d+|\\d+" +
+            // 4️⃣ Palabras (identificadores)
+            "|[A-Za-z_][A-Za-z0-9_]*" +
+            // 5️⃣ Símbolos estructurales
+            "|[{}\\[\\](),;]"
         );
+
         Matcher matcher = pattern.matcher(consulta);
 
         while (matcher.find()) {
             String token = matcher.group();
-            // Mantener los valores literales tal como están (sin upper)
+
+            // Mantener literales y números como están, pero pasar keywords a upper
             if (token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
                 tokens.add(token.toUpperCase());
             } else {
@@ -59,6 +72,7 @@ public class GestorSintaxis {
         }
         return tokens;
     }
+
 
     // ========== UTILIZE ==========
     public Boolean comandoUtilize(List<String> tokens) {
@@ -122,6 +136,12 @@ public class GestorSintaxis {
                         if (!size.matches("\\d+")) return error("Tamaño de VARCHAR inválido: " + size);
                         if (!")".equals(tokens.get(i++))) return error("Falta ')' en VARCHAR");
                         System.out.println("Columna VARCHAR(" + size + "): " + nombreColumna);
+                        break;
+                    case "BOOL":
+                        break;
+                    case "DATE":
+                        break;
+                    case "FLOAT":
                         break;
                     default:
                         return error("Tipo de dato no soportado: " + tipo);
@@ -223,39 +243,87 @@ public class GestorSintaxis {
         if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
             return error("Nombre de tabla inválido: " + nombreTabla);
 
-        if (!"{".equals(tokens.get(i++))) return error("Falta '{' tras el nombre de la tabla.");
+        if (i >= tokens.size() || !"{".equals(tokens.get(i++)))
+            return error("Falta '{' tras el nombre de la tabla.");
 
+        // ---- Leer columnas ----
         List<String> columnas = new ArrayList<>();
         while (i < tokens.size() && !"}".equals(tokens.get(i))) {
             String col = tokens.get(i++);
             if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
                 return error("Nombre de columna inválido: " + col);
             columnas.add(col);
-            if (",".equals(tokens.get(i))) i++;
-        }
-        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
-            return error("Falta '}' de cierre en las columnas.");
-
-        if (i >= tokens.size()) return error("Faltan registros entre corchetes [ ].");
-
-        while (i < tokens.size()) {
-            if (!"[".equals(tokens.get(i++))) return error("Se esperaba '[' para abrir un registro.");
-            List<String> valores = new ArrayList<>();
-            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
-                String val = tokens.get(i++);
-                valores.add(val);
-                if (",".equals(tokens.get(i))) i++;
-            }
-            if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
-                return error("Falta ']' de cierre en un registro.");
-            if (valores.size() > columnas.size())
-                return error("Demasiados valores en un registro.");
             if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
         }
 
+        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
+            return error("Falta '}' de cierre en las columnas.");
+
+        if (i >= tokens.size())
+            return error("Faltan registros entre corchetes [ ].");
+
+        // ---- Leer registros ----
+        List<List<String>> registros = new ArrayList<>();
+
+        while (i < tokens.size()) {
+            if (!"[".equals(tokens.get(i++)))
+                return error("Se esperaba '[' para abrir un registro.");
+
+            List<String> valores = new ArrayList<>();
+            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                String val = tokens.get(i++);
+
+                // Validar formato de valor
+                if (!esValorValido(val))
+                    return error("Valor inválido en registro: " + val);
+
+                valores.add(val);
+                if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+            }
+
+            if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
+                return error("Falta ']' de cierre en un registro.");
+
+            if (valores.size() != columnas.size())
+                return error("Cantidad de valores (" + valores.size() + ") no coincide con cantidad de columnas (" + columnas.size() + ").");
+
+            registros.add(valores);
+
+            // Saltar separadores opcionales
+            if (i < tokens.size() && (",".equals(tokens.get(i)) || ";".equals(tokens.get(i)))) i++;
+        }
+
         System.out.println("Comando FILE válido sobre tabla " + nombreTabla + " con columnas " + columnas);
+        System.out.println("Registros cargados: " + registros);
         return true;
     }
+
+    private boolean esValorValido(String val) {
+        // NULL
+        if (val.equalsIgnoreCase("NULL")) return true;
+
+        // INT
+        if (val.matches("-?\\d+")) return true;
+
+        // FLOAT
+        if (val.matches("-?\\d+(\\.\\d+)?")) return true;
+
+        // BOOL
+        if (val.equalsIgnoreCase("TRUE") || val.equalsIgnoreCase("FALSE") || val.equals("1") || val.equals("0"))
+            return true;
+
+        // DATE formatos permitidos
+        if (val.matches("\\d{4}-\\d{2}-\\d{2}")) return true; // formato YYYY-MM-DD
+        if (val.matches("\\d{4}年\\d{1,2}月\\d{1,2}日")) return true; // formato japonés
+
+        // VARCHAR con comillas
+        if (val.startsWith("\"") && val.endsWith("\"")) return true;
+
+        return false;
+    }
+
+
+
     
     // ========== SWEEP ==========
     public Boolean comandoSweep(List<String> tokens) {
@@ -288,9 +356,9 @@ public class GestorSintaxis {
 
             if (i >= tokens.size()) return error("Falta tipo de columna para " + col);
             String tipo = tokens.get(i++);
-            if (!tipo.matches("INT|VARCHAR"))
+            if (!tipo.matches("INT|VARCHAR|BOOL|DATE|FLOAT"))
                 return error("Tipo no válido en MORPH: " + tipo);
-
+            
             // VARCHAR con tamaño
             if ("VARCHAR".equals(tipo)) {
                 if (!"(".equals(tokens.get(i++))) return error("Falta '(' en VARCHAR");

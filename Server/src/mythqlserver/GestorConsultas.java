@@ -75,14 +75,34 @@ public class GestorConsultas {
         }
     }
 
+    // ========== NUEVO TOKENIZADOR NUEVO ==========
     private List<String> tokenizar(String consulta) {
-        Pattern pattern = Pattern.compile("\"[^\"]*\"|[A-Za-z0-9_]+|[{}(),\\[\\]]");
-        Matcher matcher = pattern.matcher(consulta);
         List<String> tokens = new ArrayList<>();
+
+        Pattern pattern = Pattern.compile(
+            // 1️⃣ Fechas tipo YYYY-MM-DD
+            "\\d{4}-\\d{2}-\\d{2}" +
+            // 2️⃣ O strings entre comillas simples o dobles
+            "|'[^']*'|\"[^\"]*\"" +
+            // 3️⃣ Números con o sin decimales
+            "|\\d+\\.\\d+|\\d+" +
+            // 4️⃣ Palabras (identificadores)
+            "|[A-Za-z_][A-Za-z0-9_]*" +
+            // 5️⃣ Símbolos estructurales
+            "|[{}\\[\\](),;]"
+        );
+
+        Matcher matcher = pattern.matcher(consulta);
+
         while (matcher.find()) {
-            String tok = matcher.group();
-            if (!tok.startsWith("\"")) tok = tok.toUpperCase();
-            tokens.add(tok);
+            String token = matcher.group();
+
+            // Mantener literales y números como están, pero pasar keywords a upper
+            if (token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                tokens.add(token.toUpperCase());
+            } else {
+                tokens.add(token);
+            }
         }
         return tokens;
     }
@@ -225,7 +245,7 @@ public class GestorConsultas {
                 return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
 
             // === Extraer nombres de columnas ===
-            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
+            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR|DATE|BOOL|FLOAT)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
             Matcher m = defPat.matcher(definicion);
             List<String> nombresColumnas = new ArrayList<>();
             while (m.find()) {
@@ -307,58 +327,114 @@ public class GestorConsultas {
     }
     
     private String comandoFile(List<String> tokens, User user) {
-        if (user.getBaseActiva() == null)
-            return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
+        try {
+            if (user.getBaseActiva() == null)
+                return "ERROR: No hay base activa. Use UTILIZE <db> primero.";
 
-        if (tokens.size() < 4)
-            return "ERROR: Sintaxis FILE incompleta.";
+            if (tokens.size() < 4)
+                return "ERROR: Sintaxis FILE incompleta.";
 
-        int i = 1;
-        String tabla = tokens.get(i++);
-        if (!new File("Databases/" + user.getBaseActiva() + "_tables/" + tabla + ".csv").exists())
-            return "ERROR: La tabla '" + tabla + "' no existe en la base activa.";
+            int i = 1;
+            String tabla = tokens.get(i++);
 
-        if (!"{".equals(tokens.get(i++)))
-            return "ERROR: Falta '{' tras el nombre de tabla.";
+            File tablaFile = new File("Databases/" + user.getBaseActiva() + "_tables/" + tabla + ".csv");
+            if (!tablaFile.exists())
+                return "ERROR: La tabla '" + tabla + "' no existe en la base activa.";
 
-        List<String> columnas = new ArrayList<>();
-        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
-            columnas.add(tokens.get(i++));
-            if (",".equals(tokens.get(i))) i++;
-        }
-        if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
-            return "ERROR: Falta '}' en lista de columnas.";
+            if (i >= tokens.size() || !"{".equals(tokens.get(i++)))
+                return "ERROR: Falta '{' tras el nombre de la tabla.";
 
-        List<List<String>> registros = new ArrayList<>();
-
-        while (i < tokens.size()) {
-            if (!"[".equals(tokens.get(i++))) return "ERROR: Falta '[' en registro.";
-            List<String> valores = new ArrayList<>();
-            while (i < tokens.size() && !"]".equals(tokens.get(i))) {
-                valores.add(tokens.get(i++));
-                if (",".equals(tokens.get(i))) i++;
+            // === Leer columnas ===
+            List<String> columnas = new ArrayList<>();
+            while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+                String col = tokens.get(i++);
+                if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
+                    return "ERROR: Nombre de columna inválido: " + col;
+                columnas.add(col);
+                if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
             }
-            if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
-                return "ERROR: Falta ']' de cierre.";
-            registros.add(valores);
-            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
-        }
 
-        enviarMensaje("FILE insertando " + registros.size() + " registros en tabla '" + tabla + 
-                     "' de " + user.getBaseActiva() + " por usuario: " + user.getUsername());
-        CSVDatabaseManager db = new CSVDatabaseManager();
-        boolean ok = db.insertarRegistros(user.getBaseActiva(), tabla, columnas, registros);
-        
-        if (ok && notificacionCallback != null) {
-            notificacionCallback.accept("Registros insertados en tabla '" + tabla + "' de " + 
-                                       user.getBaseActiva() + " por " + user.getUsername());
+            if (i >= tokens.size() || !"}".equals(tokens.get(i++)))
+                return "ERROR: Falta '}' al final de la lista de columnas.";
+
+            // === Leer registros ===
+            List<List<String>> registros = new ArrayList<>();
+
+            while (i < tokens.size()) {
+                if (!"[".equals(tokens.get(i++)))
+                    return "ERROR: Falta '[' antes de un registro.";
+
+                List<String> valores = new ArrayList<>();
+                while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                    String val = tokens.get(i++);
+
+                    // Verificar formato de valor
+                    if (!esValorValido(val))
+                        return "ERROR: Valor inválido: " + val;
+
+                    valores.add(val);
+                    if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+                }
+
+                if (i >= tokens.size() || !"]".equals(tokens.get(i++)))
+                    return "ERROR: Falta ']' de cierre en un registro.";
+
+                if (valores.size() != columnas.size())
+                    return "ERROR: El registro tiene " + valores.size() + " valores, pero se esperaban " + columnas.size() + ".";
+
+                registros.add(valores);
+
+                // Saltar separadores opcionales
+                if (i < tokens.size() && (",".equals(tokens.get(i)) || ";".equals(tokens.get(i)))) i++;
+            }
+
+            if (registros.isEmpty())
+                return "ERROR: No se encontraron registros válidos.";
+
+            // === Insertar en CSV ===
+            enviarMensaje("FILE insertando " + registros.size() + " registros en '" + tabla + "' (" + user.getBaseActiva() + ")");
+            CSVDatabaseManager db = new CSVDatabaseManager();
+            boolean ok = db.insertarRegistros(user.getBaseActiva(), tabla, columnas, registros);
+
+            if (ok && notificacionCallback != null) {
+                notificacionCallback.accept("Registros insertados en tabla '" + tabla + "' de " + user.getBaseActiva() + " por " + user.getUsername());
+            }
+
+            String resultado = ok
+                    ? "OK: Registros insertados correctamente en " + tabla
+                    : "ERROR: Fallo al insertar registros en " + tabla;
+
+            enviarMensaje(resultado);
+            return resultado;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "ERROR: Excepción en comando FILE → " + e.getMessage();
         }
-        
-        String resultado = ok ? "OK: Registros insertados en " + tabla
-                  : "ERROR: Fallo al insertar registros en " + tabla;
-        enviarMensaje(ok ? resultado : resultado);
-        return resultado;
     }
+
+    private boolean esValorValido(String val) {
+        // NULL
+        if (val.equalsIgnoreCase("NULL")) return true;
+
+        // INT o FLOAT
+        if (val.matches("-?\\d+(\\.\\d+)?")) return true;
+
+        // BOOL
+        if (val.equalsIgnoreCase("TRUE") || val.equalsIgnoreCase("FALSE") || val.equals("1") || val.equals("0"))
+            return true;
+
+        // DATE (YYYY-MM-DD o japonés)
+        if (val.matches("\\d{4}-\\d{2}-\\d{2}")) return true;
+        if (val.matches("\\d{4}年\\d{1,2}月\\d{1,2}日")) return true;
+
+        // STRING (comillas dobles o simples)
+        if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'")))
+            return true;
+
+        return false;
+    }
+
     
     // ===== COMANDO MORPH =====
     private String comandoMorph(List<String> tokens, User user) {

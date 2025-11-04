@@ -43,6 +43,24 @@ public class MythQL_UI extends JFrame {
     
     private JTree schemaTree;
     private DefaultTreeModel treeModel;
+    
+    // Sistema de pestañas dinámico
+    private int contadorPestanas = 1;
+    private List<QueryTab> queryTabs = new ArrayList<>();
+
+    // Clase interna para manejar información de cada pestaña
+    private class QueryTab {
+        JTextPane textPane;
+        String nombreArchivo;
+        boolean modificado;
+        JPanel tabPanel;
+        
+        QueryTab(JTextPane pane, String nombre) {
+            this.textPane = pane;
+            this.nombreArchivo = nombre;
+            this.modificado = false;
+        }
+    }
 
     public MythQL_UI(String token, String host, int port) {
         this.token = token;
@@ -96,9 +114,11 @@ public class MythQL_UI extends JFrame {
         JButton btnSacred = new JButton("Sacred Scroll");
         JButton btnTheme = new JButton("Change Theme");
         JButton btnRefreshSchemas = new JButton("Refresh Schemas");
+        JButton btnNewTab = new JButton("+ New Query");
 
         topPanel.add(btnExecute);
         topPanel.add(btnExecuteSel);
+        topPanel.add(btnNewTab);
         topPanel.add(btnSacred);
         topPanel.add(btnTheme);
         topPanel.add(btnRefreshSchemas);
@@ -118,7 +138,6 @@ public class MythQL_UI extends JFrame {
         gearConfiguracion.setBackground(new Color(255, 204, 102));
         gearConfiguracion.addActionListener(e -> ConfiguracionMyth());
         topPanel.add(gearConfiguracion);
-
 
         add(topPanel, BorderLayout.NORTH);
 
@@ -188,28 +207,13 @@ public class MythQL_UI extends JFrame {
 
         add(leftPanel, BorderLayout.WEST);
 
-        // ------------------- Tabs -------------------
+        // ------------------- Tabs con sistema dinámico -------------------
         tabs = new JTabbedPane();
-        for (int i = 1; i <= 3; i++) {
-            JTextPane queryPane = new JTextPane();
-            queryPane.setFont(new Font("Monospaced", Font.PLAIN, 14));
-            JScrollPane scroll = new JScrollPane(queryPane);
-            tabs.add("QUERY " + i, scroll);
-
-            queryPane.getDocument().addDocumentListener(new SimpleDocumentListener() {
-                @Override
-                public void update(DocumentEvent e) {
-                    if (highlightTimer != null && highlightTimer.isRunning()) {
-                        highlightTimer.stop();
-                    }
-                    highlightTimer = new Timer(300, evt -> {
-                        resaltarKeywordsCompleto(queryPane);
-                    });
-                    highlightTimer.setRepeats(false);
-                    highlightTimer.start();
-                }
-            });
-        }
+        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        
+        // Crear la primera pestaña
+        crearNuevaPestana("Query 1");
+        
         add(tabs, BorderLayout.CENTER);
 
         // ------------------- Consola y GIF -------------------
@@ -254,6 +258,11 @@ public class MythQL_UI extends JFrame {
             ejecutarConsulta(sel);
         });
 
+        btnNewTab.addActionListener(e -> {
+            contadorPestanas++;
+            crearNuevaPestana("Query " + contadorPestanas);
+        });
+
         btnSacred.addActionListener(e -> abrirSacredScroll());
         btnTheme.addActionListener(e -> openThemeSelector());
         btnRefreshSchemas.addActionListener(e -> cargarEsquemasJerarquicos());
@@ -271,6 +280,174 @@ public class MythQL_UI extends JFrame {
                 }
             }
         });
+    }
+
+    private void crearNuevaPestana(String nombreInicial) {
+        JTextPane queryPane = new JTextPane();
+        queryPane.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        JScrollPane scroll = new JScrollPane(queryPane);
+        
+        // Crear QueryTab
+        QueryTab queryTab = new QueryTab(queryPane, nombreInicial);
+        queryTabs.add(queryTab);
+        
+        // Crear panel personalizado para la pestaña con botón de cerrar
+        JPanel tabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        tabPanel.setOpaque(false);
+        
+        JLabel tabLabel = new JLabel(nombreInicial);
+        tabLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
+        
+        // Hacer que el label sea editable con doble clic
+        tabLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    renombrarPestana(queryTab, tabLabel);
+                }
+            }
+        });
+        
+        JButton btnClose = new JButton("×");
+        btnClose.setPreferredSize(new Dimension(20, 20));
+        btnClose.setMargin(new Insets(0, 0, 0, 0));
+        btnClose.setBorderPainted(false);
+        btnClose.setContentAreaFilled(false);
+        btnClose.setFocusPainted(false);
+        btnClose.setFont(new Font("Arial", Font.BOLD, 16));
+        btnClose.addActionListener(e -> cerrarPestana(queryTab));
+        
+        tabPanel.add(tabLabel);
+        tabPanel.add(btnClose);
+        
+        queryTab.tabPanel = tabPanel;
+        
+        // Agregar la pestaña
+        tabs.addTab(null, scroll);
+        int index = tabs.getTabCount() - 1;
+        tabs.setTabComponentAt(index, tabPanel);
+        tabs.setSelectedIndex(index);
+        
+        // Listener para detectar cambios en el documento
+        queryPane.getDocument().addDocumentListener(new SimpleDocumentListener() {
+            @Override
+            public void update(DocumentEvent e) {
+                marcarComoModificado(queryTab);
+                
+                if (highlightTimer != null && highlightTimer.isRunning()) {
+                    highlightTimer.stop();
+                }
+                highlightTimer = new Timer(300, evt -> {
+                    resaltarKeywordsCompleto(queryPane);
+                });
+                highlightTimer.setRepeats(false);
+                highlightTimer.start();
+            }
+        });
+    }
+
+    private void cerrarPestana(QueryTab queryTab) {
+        // Si está modificado, preguntar antes de cerrar
+        if (queryTab.modificado) {
+            int respuesta = JOptionPane.showConfirmDialog(
+                this,
+                "El query '" + queryTab.nombreArchivo + "' tiene cambios sin guardar. ¿Desea guardarlo antes de cerrar?",
+                "Confirmar cierre",
+                JOptionPane.YES_NO_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE
+            );
+            
+            if (respuesta == JOptionPane.YES_OPTION) {
+                guardarQueryEspecifico(queryTab);
+            } else if (respuesta == JOptionPane.CANCEL_OPTION) {
+                return; // No cerrar
+            }
+        }
+        
+        // No permitir cerrar si es la única pestaña
+        if (queryTabs.size() <= 1) {
+            logMessage("Debe haber al menos una pestaña abierta", Color.YELLOW);
+            return;
+        }
+        
+        // Encontrar el índice y remover
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getComponentAt(i) instanceof JScrollPane) {
+                JScrollPane scroll = (JScrollPane) tabs.getComponentAt(i);
+                if (scroll.getViewport().getView() == queryTab.textPane) {
+                    tabs.removeTabAt(i);
+                    queryTabs.remove(queryTab);
+                    logMessage("Pestaña '" + queryTab.nombreArchivo + "' cerrada", Color.CYAN);
+                    break;
+                }
+            }
+        }
+    }
+
+    private void renombrarPestana(QueryTab queryTab, JLabel tabLabel) {
+        String nuevoNombre = JOptionPane.showInputDialog(
+            this,
+            "Ingrese el nuevo nombre para la pestaña:",
+            queryTab.nombreArchivo
+        );
+        
+        if (nuevoNombre != null && !nuevoNombre.trim().isEmpty()) {
+            queryTab.nombreArchivo = nuevoNombre.trim();
+            actualizarEtiquetaPestana(queryTab, tabLabel);
+            logMessage("Pestaña renombrada a: " + nuevoNombre, Color.CYAN);
+        }
+    }
+
+    private void marcarComoModificado(QueryTab queryTab) {
+        if (!queryTab.modificado) {
+            queryTab.modificado = true;
+            // Actualizar la etiqueta para mostrar el asterisco
+            for (int i = 0; i < tabs.getTabCount(); i++) {
+                if (tabs.getComponentAt(i) instanceof JScrollPane) {
+                    JScrollPane scroll = (JScrollPane) tabs.getComponentAt(i);
+                    if (scroll.getViewport().getView() == queryTab.textPane) {
+                        Component tabComponent = tabs.getTabComponentAt(i);
+                        if (tabComponent instanceof JPanel) {
+                            JPanel panel = (JPanel) tabComponent;
+                            if (panel.getComponent(0) instanceof JLabel) {
+                                actualizarEtiquetaPestana(queryTab, (JLabel) panel.getComponent(0));
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private void actualizarEtiquetaPestana(QueryTab queryTab, JLabel label) {
+        String nombre = queryTab.nombreArchivo;
+        if (queryTab.modificado) {
+            nombre = "* " + nombre;
+        }
+        label.setText(nombre);
+    }
+
+    private QueryTab getCurrentQueryTab() {
+        int index = tabs.getSelectedIndex();
+        if (index >= 0 && index < tabs.getTabCount()) {
+            Component comp = tabs.getComponentAt(index);
+            if (comp instanceof JScrollPane) {
+                JScrollPane scroll = (JScrollPane) comp;
+                JTextPane pane = (JTextPane) scroll.getViewport().getView();
+                for (QueryTab qt : queryTabs) {
+                    if (qt.textPane == pane) {
+                        return qt;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private JTextPane getCurrentTextPane() {
+        QueryTab currentTab = getCurrentQueryTab();
+        return currentTab != null ? currentTab.textPane : null;
     }
 
     private void configurarNotificaciones() {
@@ -396,7 +573,6 @@ public class MythQL_UI extends JFrame {
                             }
                         }
 
-
                         Thread.sleep(150);
 
                     } catch (Exception ex) {
@@ -473,32 +649,86 @@ public class MythQL_UI extends JFrame {
         }
     }
 
-    private void mostrarWizard(String errorMsg) {
+private void mostrarWizard(String errorMsg) {
         // En lugar de mostrar una ventana, mostrar el mensaje en la consola
         logMessage("[WIZARD] Error: " + errorMsg, Color.YELLOW);
         logMessage("[WIZARD] Consulte el Sacred Scroll para más información", Color.YELLOW);
     }
 
     private void guardarQueryActual() {
-        JTextPane area = getCurrentTextPane();
-        String contenido = area.getText().trim();
+        QueryTab currentTab = getCurrentQueryTab();
+        if (currentTab == null) {
+            logError("No hay pestaña activa");
+            return;
+        }
+        
+        guardarQueryEspecifico(currentTab);
+    }
+
+    private void guardarQueryEspecifico(QueryTab queryTab) {
+        String contenido = queryTab.textPane.getText().trim();
 
         if (contenido.isEmpty()) {
             logMessage("El query está vacío, nada que guardar.", Color.YELLOW);
             return;
         }
 
-        int index = tabs.getSelectedIndex() + 1;
-        String nombreArchivo = "Script" + index + ".mql";
+        // Solicitar nombre de archivo al usuario
+        String nombreSugerido = queryTab.nombreArchivo.endsWith(".mql") ? 
+            queryTab.nombreArchivo : queryTab.nombreArchivo + ".mql";
+        
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Guardar Query");
+        fileChooser.setSelectedFile(new File(nombreSugerido));
+        
+        javax.swing.filechooser.FileNameExtensionFilter filtroMQL = 
+            new javax.swing.filechooser.FileNameExtensionFilter("MythQL Files (*.mql)", "mql");
+        fileChooser.addChoosableFileFilter(filtroMQL);
+        fileChooser.setFileFilter(filtroMQL);
+        fileChooser.setCurrentDirectory(new File(System.getProperty("user.dir")));
 
-        try {
-            Path path = Paths.get(nombreArchivo);
-            Files.write(path, contenido.getBytes(StandardCharsets.UTF_8),
-                        StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        int resultado = fileChooser.showSaveDialog(this);
 
-            logMessage("Query guardado en " + nombreArchivo, Color.GREEN);
-        } catch (Exception ex) {
-            logError("Error al guardar el archivo: " + ex.getMessage());
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            File archivo = fileChooser.getSelectedFile();
+            
+            // Asegurar que tenga extensión .mql
+            if (!archivo.getName().toLowerCase().endsWith(".mql")) {
+                archivo = new File(archivo.getAbsolutePath() + ".mql");
+            }
+
+            try {
+                Path path = archivo.toPath();
+                Files.write(path, contenido.getBytes(StandardCharsets.UTF_8),
+                            StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+                // Actualizar el nombre de la pestaña
+                queryTab.nombreArchivo = archivo.getName().replace(".mql", "");
+                queryTab.modificado = false;
+                
+                // Actualizar la etiqueta visual
+                for (int i = 0; i < tabs.getTabCount(); i++) {
+                    if (tabs.getComponentAt(i) instanceof JScrollPane) {
+                        JScrollPane scroll = (JScrollPane) tabs.getComponentAt(i);
+                        if (scroll.getViewport().getView() == queryTab.textPane) {
+                            Component tabComponent = tabs.getTabComponentAt(i);
+                            if (tabComponent instanceof JPanel) {
+                                JPanel panel = (JPanel) tabComponent;
+                                if (panel.getComponent(0) instanceof JLabel) {
+                                    actualizarEtiquetaPestana(queryTab, (JLabel) panel.getComponent(0));
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                logMessage("Query guardado en " + archivo.getName(), Color.GREEN);
+            } catch (Exception ex) {
+                logError("Error al guardar el archivo: " + ex.getMessage());
+            }
+        } else {
+            logMessage("Operación de guardado cancelada", Color.YELLOW);
         }
     }
     
@@ -517,9 +747,7 @@ public class MythQL_UI extends JFrame {
         fileChooser.addChoosableFileFilter(filtroTXT);
 
         fileChooser.setAcceptAllFileFilterUsed(true);
-
         fileChooser.setFileFilter(filtroMQL);
-
         fileChooser.setCurrentDirectory(new File(System.getProperty("user.dir")));
 
         int resultado = fileChooser.showOpenDialog(this);
@@ -531,10 +759,16 @@ public class MythQL_UI extends JFrame {
                 Path path = archivoSeleccionado.toPath();
                 String contenido = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
 
-                JTextPane area = getCurrentTextPane();
-                area.setText(contenido);
+                // Crear nueva pestaña con el nombre del archivo
+                String nombreArchivo = archivoSeleccionado.getName().replace(".mql", "").replace(".txt", "");
+                crearNuevaPestana(nombreArchivo);
+                
+                // Obtener la pestaña recién creada y establecer el contenido
+                QueryTab nuevaTab = queryTabs.get(queryTabs.size() - 1);
+                nuevaTab.textPane.setText(contenido);
+                nuevaTab.modificado = false;
 
-                resaltarKeywordsCompleto(area);
+                resaltarKeywordsCompleto(nuevaTab.textPane);
 
                 logMessage("Query cargado desde: " + archivoSeleccionado.getName(), Color.GREEN);
 
@@ -545,7 +779,7 @@ public class MythQL_UI extends JFrame {
             logMessage("Operación de apertura cancelada", Color.YELLOW);
         }
     }
-    
+
     private void ConfiguracionMyth() {
         JDialog dialog = new JDialog(this, "⚙️ MYTHQL - CONFIGURACIÓN DEL SISTEMA", true);
         dialog.setSize(1000, 650);
@@ -1353,7 +1587,7 @@ public class MythQL_UI extends JFrame {
         dialog.setVisible(true);
     }
 
-    private JTextPane getCurrentTextPane() {
+    private JTextPane getCurrentTextPanel() {
         JScrollPane scroll = (JScrollPane) tabs.getSelectedComponent();
         JViewport viewport = scroll.getViewport();
         return (JTextPane) viewport.getView();

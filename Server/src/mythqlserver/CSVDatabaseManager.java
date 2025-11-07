@@ -368,71 +368,161 @@ public class CSVDatabaseManager {
 
     
     // === MORPH ===
-    public boolean morphTable(String dbName, String tableName, List<String> columnasCompletas) {
-        LockManager.bloquearTabla(tableName);
+    public boolean morphTable(String dbName, String tableName, List<String> atributosTokens) {
         try {
             File dbFile = new File(dbPath + dbName + ".csv");
             if (!dbFile.exists()) return false;
 
-            List<String> lineas = Files.readAllLines(dbFile.toPath());
-            List<String> nuevasLineas = new ArrayList<>();
-            boolean tablaReescrita = false;
+            List<String> lines = Files.readAllLines(dbFile.toPath());
+            List<String> tablaLines = new ArrayList<>();
+            Map<String, Integer> counters = new HashMap<>();
+            boolean selfBlockStarted = false;
 
-            for (String linea : lineas) {
-                String trimmed = linea.trim();
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+                if (trimmed.toUpperCase().startsWith("SELFSTACKABLES:")) {
+                    selfBlockStarted = true;
+                    continue;
+                }
+                if (selfBlockStarted) {
+                    if (trimmed.contains("=")) {
+                        String[] partes = trimmed.split("=");
+                        String k = partes[0].trim().toUpperCase();
+                        Integer v = Integer.parseInt(partes[1].trim());
+                        counters.put(k, v);
+                    }
+                } else {
+                    tablaLines.add(line);
+                }
+            }
 
-                // Mantener todo hasta SELFSTACKABLES
-                if (trimmed.equalsIgnoreCase("SELFSTACKABLES:")) {
+            int defIndex = -1;
+            String oldDefLine = null;
+            for (int i = 0; i < tablaLines.size(); i++) {
+                String ln = tablaLines.get(i);
+                if (ln.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                    defIndex = i;
+                    oldDefLine = ln;
                     break;
                 }
+            }
+            if (defIndex == -1) return false;
 
-                // Detectar la tabla a reescribir
-                if (trimmed.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
-                    String columnasFormateadas = formatearColumnas(columnasCompletas);
-                    String nuevaLinea = tableName.toUpperCase() + ":" + columnasFormateadas;
-                    nuevasLineas.add(nuevaLinea);
-                    tablaReescrita = true;
-                } else {
-                    nuevasLineas.add(linea);
-                }
+            String newDef = String.join(" ", atributosTokens).trim();
+
+            // patrón para extraer columnas y tipos (incluye BOOL, DATE, FLOAT)
+            Pattern defPat = Pattern.compile(
+                "(\\w+)\\s+(INT|VARCHAR|BOOL|DATE|FLOAT)\\s*(?:\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?",
+                Pattern.CASE_INSENSITIVE
+            );
+
+            // Parsear definición antigua -> nombres y flags
+            String oldDefBody = oldDefLine.substring(oldDefLine.indexOf(":") + 1).trim();
+            Matcher mOld = defPat.matcher(oldDefBody);
+            List<String> oldNames = new ArrayList<>();
+            List<Boolean> oldAuto = new ArrayList<>();
+            while (mOld.find()) {
+                oldNames.add(mOld.group(1).toUpperCase());
+                oldAuto.add(mOld.group(4) != null);
             }
 
-            // Agregar bloque SELFSTACKABLES y resto
-            boolean selfBlockAgregado = false;
-            for (String linea : lineas) {
-                if (linea.trim().equalsIgnoreCase("SELFSTACKABLES:")) {
-                    nuevasLineas.add("SELFSTACKABLES:");
-                    selfBlockAgregado = true;
-                } else if (selfBlockAgregado) {
-                    nuevasLineas.add(linea);
-                }
+            // Parsear definición nueva -> nombres, tipos, auto flags
+            Matcher mNew = defPat.matcher(newDef);
+            List<String> newNames = new ArrayList<>();
+            List<String> newTypes = new ArrayList<>();
+            List<Boolean> newAuto = new ArrayList<>();
+            List<Integer> newVarcharSizes = new ArrayList<>();
+            while (mNew.find()) {
+                newNames.add(mNew.group(1).toUpperCase());
+                newTypes.add(mNew.group(2).toUpperCase());
+                newVarcharSizes.add(mNew.group(3) != null ? Integer.parseInt(mNew.group(3)) : null);
+                newAuto.add(mNew.group(4) != null);
             }
+            if (newNames.isEmpty()) return false;
 
-            // Si la tabla no existía antes, insertarla antes de SELFSTACKABLES
-            if (!tablaReescrita) {
-                String columnasFormateadas = formatearColumnas(columnasCompletas);
-                int indexSelf = nuevasLineas.indexOf("SELFSTACKABLES:");
-                if (indexSelf == -1) {
-                    nuevasLineas.add(tableName.toUpperCase() + ":" + columnasFormateadas);
-                } else {
-                    nuevasLineas.add(indexSelf, tableName.toUpperCase() + ":" + columnasFormateadas);
-                }
-            }
-
-            // Limpiar contenido de tabla física
+            // Leer filas actuales de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
-            if (tablaFile.exists()) new PrintWriter(tablaFile).close();
-            else tablaFile.createNewFile();
+            List<String> filas = new ArrayList<>();
+            if (tablaFile.exists()) {
+                filas = Files.readAllLines(tablaFile.toPath());
+            } else {
+                // Si no existe el archivo de datos, crear vacío (pero luego se llenará)
+                tablaFile.getParentFile().mkdirs();
+                tablaFile.createNewFile();
+            }
 
-            Files.write(dbFile.toPath(), nuevasLineas);
+            // Para las columnas SELF STACKABLE nuevas: si no existe contador lo inicializamos en 0
+            for (int ni = 0; ni < newNames.size(); ni++) {
+                if (newAuto.get(ni)) {
+                    String key = tableName.toUpperCase() + "." + newNames.get(ni);
+                    counters.putIfAbsent(key, 0);
+                }
+            }
+
+            // Construir nuevas filas: mapear por nombre de columna
+            List<String> nuevasFilas = new ArrayList<>();
+            for (String fila : filas) {
+                // split simple (consistencia con resto del proyecto). split(",", -1) para conservar vacíos
+                String[] valoresAnt = fila.split(",", -1);
+                Map<String, String> valorPorCol = new HashMap<>();
+                for (int oi = 0; oi < oldNames.size(); oi++) {
+                    String colName = oldNames.get(oi);
+                    String val = oi < valoresAnt.length ? valoresAnt[oi] : "NULL";
+                    valorPorCol.put(colName.toUpperCase(), val);
+                }
+                // Construir fila nueva según newNames
+                List<String> nuevaFilaVals = new ArrayList<>();
+                for (int j = 0; j < newNames.size(); j++) {
+                    String col = newNames.get(j);
+                    if (valorPorCol.containsKey(col)) {
+                        nuevaFilaVals.add(valorPorCol.get(col));
+                    } else {
+                        // columna nueva: si es AUTO -> generar secuencia; si no -> NULL
+                        if (newAuto.get(j)) {
+                            String key = tableName.toUpperCase() + "." + col;
+                            int next = counters.getOrDefault(key, 0) + 1;
+                            counters.put(key, next);
+                            nuevaFilaVals.add(String.valueOf(next));
+                        } else {
+                            nuevaFilaVals.add("NULL");
+                        }
+                    }
+                }
+                nuevasFilas.add(String.join(",", nuevaFilaVals));
+            }
+
+            // Si no había filas y hay columnas SELF STACKABLE, tal vez queramos dejar counters como estaban (sin cambios)
+            // Es posible que se quiera inicializar filas para valores auto si se quisiera — por ahora solo actualizamos counters según filas existentes.
+
+            // Reescribir archivo de datos de la tabla con las nuevas filas
+            try (FileWriter fw = new FileWriter(tablaFile, false)) {
+                for (String nf : nuevasFilas) {
+                    fw.write(nf + System.lineSeparator());
+                }
+            }
+
+            // Reemplazar definición de la tabla en tablaLines (mantener misma posición)
+            tablaLines.set(defIndex, tableName + ":" + newDef);
+
+            // Reconstruir contenido DB: todas las líneas de tablas, luego SELFSTACKABLES:
+            List<String> nuevasLineasDb = new ArrayList<>();
+            for (String tl : tablaLines) {
+                if (!tl.trim().isEmpty()) nuevasLineasDb.add(tl);
+            }
+            nuevasLineasDb.add("SELFSTACKABLES:");
+            for (Map.Entry<String, Integer> e : counters.entrySet()) {
+                nuevasLineasDb.add(e.getKey() + " = " + e.getValue());
+            }
+            Files.write(dbFile.toPath(), nuevasLineasDb);
+
             return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
-        } finally {
-            LockManager.desbloquearTabla(tableName);
         }
     }
+
 
     // === Formatear columnas correctamente ===
     private String formatearColumnas(List<String> columnasCompletas) {

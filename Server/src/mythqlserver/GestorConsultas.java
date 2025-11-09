@@ -3,6 +3,7 @@ import java.io.File;
 import java.util.*;
 import java.util.regex.*;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 public class GestorConsultas {
     private final String dbPath = "Databases/";
@@ -216,68 +217,365 @@ public class GestorConsultas {
 
     private String comandoBring(List<String> tokens, User user) {
         if (tokens.size() < 2)
-            return "ERROR: Sintaxis BRING inválida. Uso: BRING <tabla> [ { columnas } ]";
+            return "ERROR: Sintaxis BRING inválida. Uso: BRING <tabla> [ { columnas } ] [IN WHICH <condiciones>]";
 
         if (user.getBaseActiva() == null)
             return "ERROR: No hay base activa.";
 
         String dbName = user.getBaseActiva();
-        String tableName = tokens.get(1);
-        File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
-        if (!tablaFile.exists())
-            return "ERROR: Tabla '" + tableName + "' no encontrada.";
 
         try {
-            File dbFile = new File(dbPath + dbName + ".csv");
-            if (!dbFile.exists())
-                return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
+            // === Parsear tablas y columnas ===
+            int i = 1;
+            List<String> tablas = new ArrayList<>();
+            Map<String, List<String>> columnasPorTabla = new HashMap<>();
+            Map<String, List<String>> datosTablas = new HashMap<>();
+            Map<String, List<String>> definicionesTablas = new HashMap<>();
+            Map<String, List<String>> nombresColumnasTablas = new HashMap<>();
 
-            // === Leer definición de tabla ===
-            List<String> dbLines = java.nio.file.Files.readAllLines(dbFile.toPath());
-            String definicion = null;
-            for (String linea : dbLines) {
-                if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
-                    definicion = linea.substring(linea.indexOf(":") + 1).trim();
+            // Parsear tablas
+            while (i < tokens.size()) {
+                String token = tokens.get(i);
+
+                if (i < tokens.size() - 1 && "IN".equalsIgnoreCase(token) && "WHICH".equalsIgnoreCase(tokens.get(i + 1))) {
                     break;
                 }
-            }
-            if (definicion == null)
-                return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
 
-            // === Extraer nombres de columnas ===
-            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR|DATE|BOOL|FLOAT)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
-            Matcher m = defPat.matcher(definicion);
-            List<String> nombresColumnas = new ArrayList<>();
-            while (m.find()) {
-                nombresColumnas.add(m.group(1).toUpperCase());
-            }
-            if (nombresColumnas.isEmpty())
-                return "ERROR: No se pudieron extraer las columnas de la definición.";
+                if (token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                    String tableName = token;
+                    tablas.add(tableName);
 
-            // === Leer registros ===
-            List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
-            if (lineas.isEmpty())
-                return "(tabla vacía)";
+                    // Verificar que la tabla existe
+                    File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+                    if (!tablaFile.exists())
+                        return "ERROR: Tabla '" + tableName + "' no encontrada.";
+
+                    // Leer definición de tabla
+                    File dbFile = new File(dbPath + dbName + ".csv");
+                    if (!dbFile.exists())
+                        return "ERROR: Archivo de base '" + dbName + "' no encontrado.";
+
+                    List<String> dbLines = java.nio.file.Files.readAllLines(dbFile.toPath());
+                    String definicion = null;
+                    for (String linea : dbLines) {
+                        if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
+                            definicion = linea.substring(linea.indexOf(":") + 1).trim();
+                            break;
+                        }
+                    }
+                    if (definicion == null)
+                        return "ERROR: Definición de tabla '" + tableName + "' no encontrada.";
+                    definicionesTablas.put(tableName, List.of(definicion.split(",")));
+
+                    // Extraer nombres de columnas
+                    Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR|DATE|BOOL|FLOAT)(?:\\s*\\(\\s*\\d+\\s*\\))?", Pattern.CASE_INSENSITIVE);
+                    Matcher m = defPat.matcher(definicion);
+                    List<String> nombresColumnas = new ArrayList<>();
+                    while (m.find()) {
+                        nombresColumnas.add(m.group(1).toUpperCase());
+                    }
+                    if (nombresColumnas.isEmpty())
+                        return "ERROR: No se pudieron extraer las columnas de la definición de '" + tableName + "'.";
+                    nombresColumnasTablas.put(tableName, nombresColumnas);
+
+                    // Leer datos de la tabla
+                    List<String> lineas = java.nio.file.Files.readAllLines(tablaFile.toPath());
+                    datosTablas.put(tableName, lineas);
+
+                    // Parsear columnas específicas si las hay
+                    List<String> columnasPedidas = new ArrayList<>();
+                    i++;
+                    if (i < tokens.size() && "{".equals(tokens.get(i))) {
+                        i++;
+                        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+                            String col = tokens.get(i).replace(",", "").trim().toUpperCase();
+                            if (!col.isEmpty()) columnasPedidas.add(col);
+                            i++;
+                        }
+                        if (i < tokens.size() && "}".equals(tokens.get(i))) i++;
+                    } else {
+                        columnasPedidas.addAll(nombresColumnas);
+                    }
+                    columnasPorTabla.put(tableName, columnasPedidas);
+
+                    if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                        i++;
+                    }
+                } else {
+                    i++;
+                }
+            }
+
+            // === Parsear condiciones IN WHICH ===
+            List<String> condicionesJoin = new ArrayList<>();
+            String condicionWhere = null;
+            String operadorWhere = null;
+            String valorWhere = null;
+
+            if (i < tokens.size() && "IN".equalsIgnoreCase(tokens.get(i)) && i + 1 < tokens.size() && "WHICH".equalsIgnoreCase(tokens.get(i + 1))) {
+                i += 2;
+
+                while (i < tokens.size()) {
+                    if (i + 6 >= tokens.size())
+                        return "ERROR: Sintaxis incompleta en IN WHICH";
+
+                    // Parsear: Tabla { Columna } operador ...
+                    String leftTabla = tokens.get(i);
+                    String leftBraceOpen = tokens.get(i + 1);
+                    String leftColumna = tokens.get(i + 2);
+                    String leftBraceClose = tokens.get(i + 3);
+
+                    if (!"{".equals(leftBraceOpen) || !"}".equals(leftBraceClose))
+                        return "ERROR: Formato inválido. Use: Tabla { Columna }";
+
+                    String leftSide = leftTabla + "{" + leftColumna + "}";
+                    i += 4;
+
+                    String operador = tokens.get(i++).toUpperCase();
+
+                    // Verificar si es condición WHERE [valor] o JOIN Tabla { Columna }
+                    if (i < tokens.size() && "[".equals(tokens.get(i))) {
+                        // WHERE condition
+                        i++; // saltar [
+                        StringBuilder sb = new StringBuilder();
+                        while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                            sb.append(tokens.get(i)).append(" ");
+                            i++;
+                        }
+                        if (i >= tokens.size() || !"]".equals(tokens.get(i)))
+                            return "ERROR: Falta ']' de cierre";
+
+                        String valor = sb.toString().trim();
+                        i++; // saltar ]
+
+                        condicionWhere = leftSide;
+                        operadorWhere = operador;
+                        valorWhere = valor;
+                    } else {
+                        // JOIN condition: Tabla { Columna }
+                        if (i + 3 >= tokens.size())
+                            return "ERROR: Sintaxis incompleta en condición JOIN";
+
+                        String rightTabla = tokens.get(i++);
+                        String rightBraceOpen = tokens.get(i++);
+                        String rightColumna = tokens.get(i++);
+                        String rightBraceClose = tokens.get(i++);
+
+                        if (!"{".equals(rightBraceOpen) || !"}".equals(rightBraceClose))
+                            return "ERROR: Formato inválido. Use: Tabla { Columna }";
+
+                        String rightSide = rightTabla + "{" + rightColumna + "}";
+                        condicionesJoin.add(leftSide + " " + operador + " " + rightSide);
+                    }
+
+                    // Verificar AND
+                    if (i < tokens.size() && "AND".equalsIgnoreCase(tokens.get(i))) {
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            // === Realizar INNER JOIN si hay múltiples tablas ===
+            List<Map<String, String>> resultadoJoin = new ArrayList<>();
+
+            if (tablas.size() == 1) {
+                // Caso simple: una sola tabla
+                String tableName = tablas.get(0);
+                List<String> lineas = datosTablas.get(tableName);
+                List<String> nombresColumnas = nombresColumnasTablas.get(tableName);
+
+                for (String linea : lineas) {
+                    String[] valores = linea.split(",", -1);
+                    Map<String, String> fila = new HashMap<>();
+
+                    for (int c = 0; c < nombresColumnas.size() && c < valores.length; c++) {
+                        String val = normalizarValor(valores[c]);
+                        fila.put(tableName + "." + nombresColumnas.get(c), val);
+                    }
+
+                    // Aplicar filtro WHERE si existe
+                    if (condicionWhere != null && !aplicarFiltro(fila, condicionWhere, operadorWhere, valorWhere)) {
+                        continue;
+                    }
+
+                    resultadoJoin.add(fila);
+                }
+            } else {
+                // INNER JOIN múltiples tablas
+                resultadoJoin = realizarInnerJoin(tablas, datosTablas, nombresColumnasTablas, condicionesJoin);
+
+                // Aplicar filtro WHERE si existe
+                if (condicionWhere != null) {
+                    List<Map<String, String>> resultadoFiltrado = new ArrayList<>();
+                    for (Map<String, String> fila : resultadoJoin) {
+                        if (aplicarFiltro(fila, condicionWhere, operadorWhere, valorWhere)) {
+                            resultadoFiltrado.add(fila);
+                        }
+                    }
+                    resultadoJoin = resultadoFiltrado;
+                }
+            }
 
             // === Construir salida ===
+            if (resultadoJoin.isEmpty()) {
+                return "(sin resultados)";
+            }
+
             StringBuilder sb = new StringBuilder();
 
-            // Encabezado
-            String header = tableName.toUpperCase() + " " + String.join(" \\ ", nombresColumnas);
-            sb.append(header).append("||");
+            // Encabezado con nombres de tablas y columnas
+            List<String> encabezados = new ArrayList<>();
+            for (String tabla : tablas) {
+                for (String col : columnasPorTabla.get(tabla)) {
+                    encabezados.add(tabla + "." + col);
+                }
+            }
+            sb.append(String.join(" \\ ", encabezados)).append("||");
 
-            // Registros
-            for (String linea : lineas) {
-                String[] valores = linea.split(",", -1);
-                String fila = String.join(" | ", valores);
-                sb.append(fila).append("\\");
+            // Datos
+            for (Map<String, String> fila : resultadoJoin) {
+                List<String> valoresFila = new ArrayList<>();
+                for (String tabla : tablas) {
+                    for (String col : columnasPorTabla.get(tabla)) {
+                        String clave = tabla + "." + col.toUpperCase();
+                        String valor = fila.getOrDefault(clave, "null");
+                        valoresFila.add(valor);
+                    }
+                }
+                sb.append(String.join(" | ", valoresFila)).append("\\");
             }
 
             return sb.toString();
 
         } catch (Exception e) {
             e.printStackTrace();
-            return "ERROR: No se pudo leer la tabla '" + tableName + "'.";
+            return "ERROR: No se pudo ejecutar el comando BRING.";
+        }
+    }
+
+    // === Método para realizar INNER JOIN ===
+    private List<Map<String, String>> realizarInnerJoin(List<String> tablas, 
+                                                       Map<String, List<String>> datosTablas,
+                                                       Map<String, List<String>> nombresColumnasTablas,
+                                                       List<String> condicionesJoin) {
+        List<Map<String, String>> resultado = new ArrayList<>();
+
+        if (tablas.isEmpty()) return resultado;
+
+        // Empezar con la primera tabla
+        String primeraTabla = tablas.get(0);
+        for (String linea : datosTablas.get(primeraTabla)) {
+            String[] valores = linea.split(",", -1);
+            Map<String, String> filaBase = new HashMap<>();
+
+            for (int c = 0; c < nombresColumnasTablas.get(primeraTabla).size() && c < valores.length; c++) {
+                String val = normalizarValor(valores[c]);
+                filaBase.put(primeraTabla + "." + nombresColumnasTablas.get(primeraTabla).get(c), val);
+            }
+
+            resultado.add(filaBase);
+        }
+
+        // Unir con las demás tablas
+        for (int t = 1; t < tablas.size(); t++) {
+            String tablaActual = tablas.get(t);
+            List<Map<String, String>> nuevoResultado = new ArrayList<>();
+
+            for (Map<String, String> filaExistente : resultado) {
+                for (String linea : datosTablas.get(tablaActual)) {
+                    String[] valores = linea.split(",", -1);
+                    Map<String, String> filaCombinada = new HashMap<>(filaExistente);
+
+                    // Agregar datos de la tabla actual
+                    for (int c = 0; c < nombresColumnasTablas.get(tablaActual).size() && c < valores.length; c++) {
+                        String val = normalizarValor(valores[c]);
+                        filaCombinada.put(tablaActual + "." + nombresColumnasTablas.get(tablaActual).get(c), val);
+                    }
+
+                    // Verificar condiciones de JOIN
+                    boolean cumpleCondiciones = true;
+                    for (String condicion : condicionesJoin) {
+                        String[] partes = condicion.split(" ");
+                        if (partes.length >= 3) {
+                            String leftCol = partes[0]; // Formato: Tabla{Columna}
+                            String operador = partes[1];
+                            String rightCol = partes[2]; // Formato: Tabla{Columna}
+
+                            String leftTabla = leftCol.substring(0, leftCol.indexOf("{"));
+                            String leftCampo = leftCol.substring(leftCol.indexOf("{") + 1, leftCol.indexOf("}"));
+                            String rightTabla = rightCol.substring(0, rightCol.indexOf("{"));
+                            String rightCampo = rightCol.substring(rightCol.indexOf("{") + 1, rightCol.indexOf("}"));
+
+                            String valorLeft = filaCombinada.get(leftTabla + "." + leftCampo.toUpperCase());
+                            String valorRight = filaCombinada.get(rightTabla + "." + rightCampo.toUpperCase());
+
+                            if (valorLeft == null || valorRight == null || 
+                                !cumpleCondicion(valorLeft, operador, valorRight)) {
+                                cumpleCondiciones = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (cumpleCondiciones) {
+                        nuevoResultado.add(filaCombinada);
+                    }
+                }
+            }
+
+            resultado = nuevoResultado;
+        }
+
+        return resultado;
+    }
+
+    // === Helper para aplicar filtro WHERE ===
+    private boolean aplicarFiltro(Map<String, String> fila, String condicionWhere, String operador, String valor) {
+        // Parsear Tabla{Columna}
+        String tabla = condicionWhere.substring(0, condicionWhere.indexOf("{"));
+        String columna = condicionWhere.substring(condicionWhere.indexOf("{") + 1, condicionWhere.indexOf("}"));
+
+        String valorCampo = fila.get(tabla + "." + columna.toUpperCase());
+        if (valorCampo == null) return false;
+
+        return cumpleCondicion(valorCampo, operador, valor);
+    }
+
+    // === Helper para normalizar valores ===
+    private String normalizarValor(String valor) {
+        return valor.trim()
+                .replaceAll("^\"|\"$", "")
+                .replaceAll("^'|'$", "")
+                .replaceAll("(?i)null", "");
+    }
+
+    // === Helper para condiciones (el mismo que tenías) ===
+    private boolean cumpleCondicion(String valorCampo, String op, String valorComparar) {
+        if (valorCampo == null || valorComparar == null) {
+            return false;
+        }
+
+        if (op.equals("GREATER") || op.equals("LESS")) {
+            try {
+                double numCampo = Double.parseDouble(valorCampo);
+                double numComparar = Double.parseDouble(valorComparar);
+                switch (op.toUpperCase()) {
+                    case "GREATER": return numCampo > numComparar;
+                    case "LESS": return numCampo < numComparar;
+                    default: return false;
+                }
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+
+        switch (op.toUpperCase()) {
+            case "EQUALS": return valorCampo.equalsIgnoreCase(valorComparar);
+            case "NOTEQUALS": return !valorCampo.equalsIgnoreCase(valorComparar);
+            case "CONTAINS": return valorCampo.toLowerCase().contains(valorComparar.toLowerCase());
+            default: return false;
         }
     }
 

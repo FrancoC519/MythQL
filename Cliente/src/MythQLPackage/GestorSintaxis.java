@@ -1,6 +1,8 @@
 package MythQLPackage;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -176,36 +178,145 @@ public class GestorSintaxis {
     // ========== BRING ==========
     public Boolean comandoBring(List<String> tokens) {
         if (tokens.size() < 2)
-            return error("Sintaxis incorrecta. Uso: BRING <tabla> [ { columnas } ]");
+            return error("Sintaxis incorrecta. Uso: BRING <tabla> [ { columnas } ] [IN WHICH <col> <op> [valor]]");
 
-        String nombreTabla = tokens.get(1);
-        if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
-            return error("Nombre de tabla inválido: " + nombreTabla);
+        // Debug: mostrar tokens
+        System.out.println("DEBUG - Tokens BRING: " + tokens);
 
-        // Solo BRING <tabla>
-        if (tokens.size() == 2) {
-            System.out.println("Comando BRING completo: " + nombreTabla + " (todas las columnas)");
-            return true;
+        int i = 1;
+        List<String> tablas = new ArrayList<>();
+        Map<String, List<String>> columnasPorTabla = new HashMap<>();
+        List<String> condicionesJoin = new ArrayList<>();
+        String condicionWhereCol = null, operadorWhere = null, valorWhere = null;
+
+        // Parsear tablas y sus columnas
+        while (i < tokens.size()) {
+            String token = tokens.get(i);
+
+            // Si encontramos IN WHICH, terminamos de parsear tablas
+            if (i < tokens.size() - 1 && "IN".equalsIgnoreCase(token) && "WHICH".equalsIgnoreCase(tokens.get(i + 1))) {
+                break;
+            }
+
+            // Parsear tabla { col1, col2, ... }
+            if (token.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                String nombreTabla = token;
+                tablas.add(nombreTabla);
+                List<String> columnas = new ArrayList<>();
+
+                i++;
+
+                // Verificar si hay columnas específicas {
+                if (i < tokens.size() && "{".equals(tokens.get(i))) {
+                    i++;
+                    while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+                        String col = tokens.get(i);
+                        // Si es una palabra, es nombre de columna
+                        if (col.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                            columnas.add(col);
+                        }
+                        i++;
+                        // Saltar coma si existe
+                        if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+                    }
+                    if (i >= tokens.size() || !"}".equals(tokens.get(i)))
+                        return error("Falta '}' de cierre en la selección de columnas.");
+                    i++;
+                }
+                columnasPorTabla.put(nombreTabla, columnas);
+
+                // Verificar si hay más tablas (separadas por coma)
+                if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                    i++;
+                }
+            } else {
+                return error("Se esperaba nombre de tabla: " + token);
+            }
         }
 
-        // BRING <tabla> { col1, col2 }
-        int i = 2;
-        if (!"{".equals(tokens.get(i++)))
-            return error("Se esperaba '{' tras el nombre de la tabla.");
+        // Parsear condiciones IN WHICH (tanto JOIN como WHERE)
+        if (i < tokens.size() && "IN".equalsIgnoreCase(tokens.get(i)) && i + 1 < tokens.size() && "WHICH".equalsIgnoreCase(tokens.get(i + 1))) {
+            i += 2;
 
-        List<String> columnas = new ArrayList<>();
-        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
-            String col = tokens.get(i++);
-            if (!col.matches("[A-Za-z_][A-Za-z0-9_]*"))
-                return error("Nombre de columna inválido: " + col);
-            columnas.add(col);
-            if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
+            // Puede haber múltiples condiciones separadas por AND
+            while (i < tokens.size()) {
+                if (i + 4 >= tokens.size())
+                    return error("Sintaxis incompleta en IN WHICH");
+
+                // Parsear lado izquierdo: Tabla { Columna }
+                if (!tokens.get(i).matches("[A-Za-z_][A-Za-z0-9_]*") || !"{".equals(tokens.get(i + 1)) || 
+                    !tokens.get(i + 2).matches("[A-Za-z_][A-Za-z0-9_]*") || !"}".equals(tokens.get(i + 3))) {
+                    return error("Formato inválido para columna. Use: Tabla { Columna }");
+                }
+
+                String leftTabla = tokens.get(i);
+                String leftColumna = tokens.get(i + 2);
+                String leftSide = leftTabla + "{" + leftColumna + "}";
+                i += 4;
+
+                String operador = tokens.get(i++).toUpperCase();
+                if (!List.of("EQUALS", "GREATER", "LESS", "NOTEQUALS", "CONTAINS").contains(operador))
+                    return error("Operador no válido: " + operador);
+
+                // Parsear lado derecho: puede ser Tabla { Columna } o [valor]
+                String rightSide;
+
+                if (i < tokens.size() && "[".equals(tokens.get(i))) {
+                    // Es una condición WHERE con valor [valor]
+                    if (condicionWhereCol != null)
+                        return error("Solo se permite una condición WHERE");
+
+                    i++; // saltar el [
+                    StringBuilder sb = new StringBuilder();
+                    while (i < tokens.size() && !"]".equals(tokens.get(i))) {
+                        sb.append(tokens.get(i)).append(" ");
+                        i++;
+                    }
+                    if (i >= tokens.size() || !"]".equals(tokens.get(i)))
+                        return error("Falta ']' de cierre en el valor.");
+
+                    String valor = sb.toString().trim();
+                    i++; // saltar el ]
+
+                    condicionWhereCol = leftSide;
+                    operadorWhere = operador;
+                    valorWhere = valor;
+                    rightSide = "[" + valor + "]";
+                } else {
+                    // Es una condición JOIN entre columnas: Tabla { Columna }
+                    if (i + 3 >= tokens.size() || 
+                        !tokens.get(i).matches("[A-Za-z_][A-Za-z0-9_]*") || !"{".equals(tokens.get(i + 1)) || 
+                        !tokens.get(i + 2).matches("[A-Za-z_][A-Za-z0-9_]*") || !"}".equals(tokens.get(i + 3))) {
+                        return error("Formato inválido para columna derecha. Use: Tabla { Columna }");
+                    }
+
+                    String rightTabla = tokens.get(i);
+                    String rightColumna = tokens.get(i + 2);
+                    rightSide = rightTabla + "{" + rightColumna + "}";
+                    i += 4;
+
+                    condicionesJoin.add(leftSide + " " + operador + " " + rightSide);
+                }
+
+                // Verificar si hay AND para más condiciones
+                if (i < tokens.size() && "AND".equalsIgnoreCase(tokens.get(i))) {
+                    i++;
+                } else {
+                    break;
+                }
+            }
         }
 
-        if (i >= tokens.size() || !"}".equals(tokens.get(i)))
-            return error("Falta '}' de cierre en la selección de columnas.");
+        System.out.println("Comando BRING -> Tablas: " + tablas);
+        for (String tabla : tablas) {
+            System.out.println("  " + tabla + ": " + 
+                (columnasPorTabla.get(tabla).isEmpty() ? "(todas)" : columnasPorTabla.get(tabla)));
+        }
+        if (!condicionesJoin.isEmpty())
+            System.out.println("Joins: " + condicionesJoin);
+        if (condicionWhereCol != null)
+            System.out.println("Where: " + condicionWhereCol + " " + operadorWhere + " " + valorWhere);
 
-        System.out.println("Comando BRING con columnas: " + nombreTabla + " → " + columnas);
         return true;
     }
 

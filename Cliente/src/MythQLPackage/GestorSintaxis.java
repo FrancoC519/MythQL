@@ -115,46 +115,63 @@ public class GestorSintaxis {
             if (!nombreTabla.matches("[A-Za-z_][A-Za-z0-9_]*"))
                 return error("Nombre de tabla inválido");
             if (!"{".equals(tokens.get(i++))) return error("Falta '{'");
+
             while (i < tokens.size()) {
                 if ("}".equals(tokens.get(i))) return true;
+
                 String nombreColumna = tokens.get(i++);
                 if (!nombreColumna.matches("[A-Za-z_][A-Za-z0-9_]*"))
                     return error("Nombre de columna inválido: " + nombreColumna);
+
+                if (i >= tokens.size()) return error("Falta tipo de dato para columna: " + nombreColumna);
                 String tipo = tokens.get(i++);
+
                 switch (tipo) {
                     case "INT":
-                        if (i + 1 < tokens.size()
-                                && "SELF".equals(tokens.get(i))
-                                && "STACKABLE".equals(tokens.get(i + 1))) {
-                            System.out.println("Columna INT con SELF STACKABLE: " + nombreColumna);
+                    case "BOOL":
+                    case "DATE":
+                    case "FLOAT":
+                        // Atributos especiales opcionales
+                        if (i + 1 < tokens.size() &&
+                            "SELF".equals(tokens.get(i)) &&
+                            "STACKABLE".equals(tokens.get(i + 1))) {
+                            System.out.println("Columna " + nombreColumna + " con SELF STACKABLE");
                             i += 2;
-                        } else {
-                            System.out.println("Columna INT: " + nombreColumna);
+                        }
+                        if (i + 1 < tokens.size() &&
+                            "NATIVE".equals(tokens.get(i)) &&
+                            "KEY".equals(tokens.get(i + 1))) {
+                            System.out.println("Columna " + nombreColumna + " con NATIVE KEY");
+                            i += 2;
                         }
                         break;
+
                     case "VARCHAR":
                         if (!"(".equals(tokens.get(i++))) return error("Falta '(' en VARCHAR");
                         String size = tokens.get(i++);
                         if (!size.matches("\\d+")) return error("Tamaño de VARCHAR inválido: " + size);
                         if (!")".equals(tokens.get(i++))) return error("Falta ')' en VARCHAR");
-                        System.out.println("Columna VARCHAR(" + size + "): " + nombreColumna);
+                        if (i + 1 < tokens.size() &&
+                            "NATIVE".equals(tokens.get(i)) &&
+                            "KEY".equals(tokens.get(i + 1))) {
+                            System.out.println("Columna VARCHAR(" + size + ") " + nombreColumna + " con NATIVE KEY");
+                            i += 2;
+                        }
                         break;
-                    case "BOOL":
-                        break;
-                    case "DATE":
-                        break;
-                    case "FLOAT":
-                        break;
+
                     default:
                         return error("Tipo de dato no soportado: " + tipo);
                 }
-                if (",".equals(tokens.get(i))) i++;
+
+                if (i < tokens.size() && ",".equals(tokens.get(i))) i++;
             }
+
             return error("Falta '}' de cierre en SUMMON");
         }
 
         return error("Se esperaba DATABASE o TABLE después de SUMMON");
     }
+
 
     // ========== BURN ==========
     public Boolean comandoBurn(List<String> tokens) {

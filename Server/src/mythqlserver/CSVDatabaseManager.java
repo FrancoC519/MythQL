@@ -42,7 +42,21 @@ public class CSVDatabaseManager {
             List<String> lineas = Files.readAllLines(dbFile.toPath());
             List<String> nuevasLineas = new ArrayList<>();
             boolean selfBlockFound = false;
+            List<String> nativeKeys = new ArrayList<>();
 
+            // Detectar columnas con NATIVE KEY
+            for (int i = 0; i < atributos.size(); i++) {
+                if ("NATIVE".equalsIgnoreCase(atributos.get(i)) &&
+                    i + 1 < atributos.size() &&
+                    "KEY".equalsIgnoreCase(atributos.get(i + 1))) {
+                    // Buscar el nombre de columna anterior
+                    int j = i - 2;
+                    while (j >= 0 && !atributos.get(j).matches("[A-Za-z_][A-Za-z0-9_]*")) j--;
+                    if (j >= 0) nativeKeys.add(atributos.get(j));
+                }
+            }
+
+            // Insertar la definición de la tabla antes de SELFSTACKABLES:
             for (String linea : lineas) {
                 if (linea.trim().toUpperCase().startsWith("SELFSTACKABLES:")) {
                     selfBlockFound = true;
@@ -50,16 +64,38 @@ public class CSVDatabaseManager {
                 }
                 nuevasLineas.add(linea);
             }
-
             if (!selfBlockFound) {
                 nuevasLineas.add(nombreTabla + ":" + String.join(" ", atributos));
             }
 
+            // Verificar si ya hay una sección RELATIONS:
+            boolean relationBlockFound = false;
+            for (String linea : nuevasLineas) {
+                if (linea.trim().toUpperCase().startsWith("RELATIONS:")) {
+                    relationBlockFound = true;
+                    break;
+                }
+            }
+
+            // Si no hay sección RELATIONS, crearla
+            if (!relationBlockFound) {
+                nuevasLineas.add("");
+                nuevasLineas.add("RELATIONS:");
+            }
+
+            // Agregar definición de NATIVE KEYS si las hay
+            if (!nativeKeys.isEmpty()) {
+                nuevasLineas.add(nombreTabla.toUpperCase() + ".NATIVE KEYS = " +
+                                 String.join(",", nativeKeys));
+            }
+
             Files.write(dbFile.toPath(), nuevasLineas);
 
+            // Crear archivo físico de la tabla
             File tablaFile = new File(dbPath + dbName + "_tables/" + nombreTabla + ".csv");
             if (tablaFile.exists()) return false;
             return tablaFile.createNewFile();
+
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -67,6 +103,7 @@ public class CSVDatabaseManager {
             LockManager.desbloquearTabla(nombreTabla);
         }
     }
+
 
     // ===== ELIMINAR DB =====
     public boolean eliminarDatabase(String dbName) {
@@ -203,11 +240,13 @@ public class CSVDatabaseManager {
         try {
             File dbMeta = new File(dbPath + dbName + ".csv");
             if (!dbMeta.exists()) return false;
+            System.out.println("OK");
 
             List<String> lineas = Files.readAllLines(dbMeta.toPath());
             Map<String, Integer> counters = new HashMap<>();
             List<String> tablaLines = new ArrayList<>();
             boolean selfBlockStarted = false;
+            System.out.println("OK2");
 
             for (String linea : lineas) {
                 String trimmed = linea.trim();
@@ -218,16 +257,28 @@ public class CSVDatabaseManager {
                     continue;
                 }
 
+                if (trimmed.toUpperCase().startsWith("RELATIONS:")) {
+                    // Si llegamos a RELATIONS, dejamos de leer selfstackables
+                    selfBlockStarted = false;
+                }
+
                 if (selfBlockStarted) {
                     if (trimmed.contains("=")) {
                         String[] partes = trimmed.split("=");
-                        counters.put(partes[0].trim().toUpperCase(), Integer.parseInt(partes[1].trim()));
+                        String key = partes[0].trim().toUpperCase();
+                        int value = Integer.parseInt(partes[1].trim());
+
+                        // ✅ Solo cargar los contadores que pertenecen a la tabla actual
+                        if (key.startsWith(tableName.toUpperCase() + ".")) {
+                            counters.put(key, value);
+                        }
                     }
                 } else {
                     tablaLines.add(linea);
                 }
             }
 
+            // Buscar definición de la tabla
             String definicion = null;
             for (String linea : tablaLines) {
                 if (linea.toUpperCase().startsWith(tableName.toUpperCase() + ":")) {
@@ -236,26 +287,46 @@ public class CSVDatabaseManager {
                 }
             }
             if (definicion == null) return false;
+            System.out.println("OK3");
 
-            // Ahora soporta INT, VARCHAR, FLOAT, BOOL, DATE
-            Pattern defPat = Pattern.compile("(\\w+)\\s+(INT|VARCHAR|FLOAT|BOOL|DATE)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?", Pattern.CASE_INSENSITIVE);
+            // Detectar tipos y claves
+            Pattern defPat = Pattern.compile(
+                "(\\w+)\\s+(INT|VARCHAR|FLOAT|BOOL|DATE)\\s*(\\(\\s*(\\d+)\\s*\\))?\\s*(SELF\\s*STACKABLE)?\\s*(NATIVE\\s*KEY)?",
+                Pattern.CASE_INSENSITIVE
+            );
             Matcher m = defPat.matcher(definicion);
 
             List<String> nombres = new ArrayList<>();
             List<String> tipos = new ArrayList<>();
             List<Integer> longitudes = new ArrayList<>();
             List<Boolean> autoInc = new ArrayList<>();
+            List<Boolean> esClaveNativa = new ArrayList<>();
 
             while (m.find()) {
                 nombres.add(m.group(1).toUpperCase());
                 tipos.add(m.group(2).toUpperCase());
                 longitudes.add(m.group(4) != null ? Integer.parseInt(m.group(4)) : null);
                 autoInc.add(m.group(5) != null);
+                esClaveNativa.add(m.group(6) != null);
             }
 
-            // Validar los registros
+            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
+            if (!tablaFile.exists()) return false;
+            System.out.println("OK4");
+
+            List<List<String>> registrosExistentes = new ArrayList<>();
+            try (BufferedReader br = new BufferedReader(new FileReader(tablaFile))) {
+                String linea;
+                while ((linea = br.readLine()) != null) {
+                    String[] partes = linea.split(",");
+                    registrosExistentes.add(Arrays.asList(partes));
+                }
+            }
+
+            // Validar registros nuevos
             for (List<String> registro : registros) {
                 if (registro.size() != columnas.size()) return false;
+                System.out.println("OK5");
 
                 for (int i = 0; i < columnas.size(); i++) {
                     String col = columnas.get(i).toUpperCase();
@@ -268,54 +339,46 @@ public class CSVDatabaseManager {
 
                     switch (tipo) {
                         case "INT":
-                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+")) {
-                                System.err.println("ERROR: Valor no entero en columna " + col);
-                                return false;
-                            }
+                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+"))
+                                return error("Valor no entero en columna " + col);
                             break;
-
                         case "FLOAT":
-                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+(\\.\\d+)?")) {
-                                System.err.println("ERROR: Valor no flotante en columna " + col);
-                                return false;
-                            }
+                            if (valor.startsWith("\"") || valor.endsWith("\"") || !valor.matches("-?\\d+(\\.\\d+)?"))
+                                return error("Valor no flotante en columna " + col);
                             break;
-
                         case "VARCHAR":
-                            if (!valor.startsWith("\"") || !valor.endsWith("\"")) {
-                                System.err.println("ERROR: VARCHAR sin comillas en columna " + col);
-                                return false;
-                            }
+                            if (!valor.startsWith("\"") || !valor.endsWith("\""))
+                                return error("VARCHAR sin comillas en columna " + col);
                             String contenido = valor.substring(1, valor.length() - 1);
-                            if (maxLen != null && contenido.length() > maxLen) {
-                                System.err.println("ERROR: VARCHAR demasiado largo en columna " + col);
-                                return false;
-                            }
+                            if (maxLen != null && contenido.length() > maxLen)
+                                return error("VARCHAR demasiado largo en columna " + col);
                             break;
-
                         case "BOOL":
                             if (!valor.equalsIgnoreCase("TRUE") && !valor.equalsIgnoreCase("FALSE")
-                                    && !valor.equals("1") && !valor.equals("0")) {
-                                System.err.println("ERROR: Valor no booleano en columna " + col + " (" + valor + ")");
-                                return false;
-                            }
+                                    && !valor.equals("1") && !valor.equals("0"))
+                                return error("Valor no booleano en columna " + col);
                             break;
-
                         case "DATE":
-                            // Validación formato japonés: YYYY年MM月DD日
-                            if (!valor.matches("\\d{4}-\\d{1,2}-\\d{1,2}")) {
-                                System.err.println("ERROR: Fecha inválida (debe ser YYYY-MM-DD) en columna " + col);
+                            if (!valor.matches("\\d{4}-\\d{1,2}-\\d{1,2}"))
+                                return error("Fecha inválida (debe ser YYYY-MM-DD) en columna " + col);
+                            break;
+                    }
+                    System.out.println("OK6");
+
+                    // Validar duplicados si es NATIVE KEY
+                    if (esClaveNativa.get(idx) && !autoInc.get(idx)) {
+                        int colIndex = nombres.indexOf(col);
+                        for (List<String> filaExistente : registrosExistentes) {
+                            if (filaExistente.size() > colIndex && filaExistente.get(colIndex).equals(valor)) {
+                                System.err.println("ERROR: Valor duplicado en NATIVE KEY " + col + " → " + valor);
                                 return false;
                             }
-                            break;
+                        }
                     }
                 }
             }
 
-            // Escritura en archivo de tabla
-            File tablaFile = new File(dbPath + dbName + "_tables/" + tableName + ".csv");
-            if (!tablaFile.exists()) return false;
-
+            // Escribir en archivo
             try (FileWriter fw = new FileWriter(tablaFile, true)) {
                 for (List<String> registro : registros) {
                     Map<String, String> valorPorColumna = new HashMap<>();
@@ -346,17 +409,13 @@ public class CSVDatabaseManager {
                 }
             }
 
-            // Actualizar contadores
-            List<String> nuevasLineas = new ArrayList<>();
-            for (String linea : tablaLines) {
-                if (!linea.trim().isEmpty()) nuevasLineas.add(linea);
-            }
+            // Actualizar archivo de metadatos
+            List<String> nuevasLineas = new ArrayList<>(tablaLines);
             nuevasLineas.add("SELFSTACKABLES:");
-            for (Map.Entry<String, Integer> e : counters.entrySet()) {
+            for (Map.Entry<String, Integer> e : counters.entrySet())
                 nuevasLineas.add(e.getKey() + " = " + e.getValue());
-            }
-
             Files.write(dbMeta.toPath(), nuevasLineas);
+
             return true;
         } catch (Exception e) {
             e.printStackTrace();
@@ -365,6 +424,13 @@ public class CSVDatabaseManager {
             LockManager.desbloquearTabla(tableName);
         }
     }
+
+    private boolean error(String msg) {
+        System.err.println(msg);
+        return false;
+    }
+
+
 
     
     // === MORPH ===

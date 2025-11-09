@@ -1,0 +1,1 @@
+MORPH PROFESOR{DNI INT NATIVE KEY, Nombre VARCHAR(25), Apellido varchar(25)};

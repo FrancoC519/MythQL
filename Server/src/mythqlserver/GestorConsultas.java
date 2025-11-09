@@ -163,57 +163,65 @@ public class GestorConsultas {
             enviarMensaje(msg);
             return msg;
         }
+
         CSVDatabaseManager db = new CSVDatabaseManager();
+
+        // ====== CREAR DATABASE ======
         if ("DATABASE".equals(tokens.get(1))) {
             String nombreDB = tokens.get(2);
-            enviarMensaje(" SUMMON DATABASE: " + nombreDB + " por usuario: " + user.getUsername());
             boolean exito = db.crearDatabase(nombreDB);
             msg = exito ? "OK: Base de datos '" + nombreDB + "' creada."
                         : "ERROR: No se pudo crear la base de datos.";
-            enviarMensaje(exito ? msg : msg);
-            
-            if (exito && notificacionCallback != null) {
+            enviarMensaje(msg);
+            if (exito && notificacionCallback != null)
                 notificacionCallback.accept("Base de datos '" + nombreDB + "' creada por " + user.getUsername());
-            }
-            
             return msg;
         }
+
+        // ====== CREAR TABLE ======
         if ("TABLE".equals(tokens.get(1))) {
             if (user.getBaseActiva() == null) {
                 msg = "ERROR: No hay base activa. Use UTILIZE <db> primero.";
                 enviarMensaje(msg);
                 return msg;
             }
+
             File dbFile = new File(dbPath + user.getBaseActiva() + ".csv");
             if (!dbFile.exists()) {
                 msg = "ERROR: La base activa '" + user.getBaseActiva() + "' no existe.";
                 enviarMensaje(msg);
                 return msg;
             }
+
             String nombreTabla = tokens.get(2);
             List<String> atributos = new ArrayList<>();
+
+            // Extraer atributos
             for (int i = 4; i < tokens.size(); i++) {
                 if ("}".equals(tokens.get(i))) break;
                 atributos.add(tokens.get(i));
             }
-            enviarMensaje("SUMMON TABLE: " + nombreTabla + " en " + user.getBaseActiva() + 
-                         " con atributos: " + atributos + " por usuario: " + user.getUsername());
+
+            enviarMensaje("SUMMON TABLE: " + nombreTabla + " en " + user.getBaseActiva() +
+                          " con atributos: " + atributos + " por usuario: " + user.getUsername());
+
             boolean exito = db.crearTabla(user.getBaseActiva(), nombreTabla, atributos);
             msg = exito ? "OK: Tabla '" + nombreTabla + "' creada en DB " + user.getBaseActiva()
                         : "ERROR: No se pudo crear la tabla.";
-            enviarMensaje(exito ? msg : msg);
-            
-            if (exito && notificacionCallback != null) {
-                notificacionCallback.accept("Tabla '" + nombreTabla + "' creada en " + 
-                                           user.getBaseActiva() + " por " + user.getUsername());
-            }
-            
+            enviarMensaje(msg);
+
+            if (exito && notificacionCallback != null)
+                notificacionCallback.accept("Tabla '" + nombreTabla + "' creada en " +
+                                            user.getBaseActiva() + " por " + user.getUsername());
+
             return msg;
         }
+
         msg = "ERROR: SUMMON debe ser DATABASE o TABLE.";
         enviarMensaje(msg);
         return msg;
     }
+
 
     private String comandoBring(List<String> tokens, User user) {
         if (tokens.size() < 2)

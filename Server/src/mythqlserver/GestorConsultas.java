@@ -10,23 +10,27 @@ public class GestorConsultas {
     private Consumer<String> messageCallback;
     private Consumer<String> notificacionCallback;
     private TransactionManager transactionManager;
+    private UserStore userStore;
 
     public GestorConsultas() {
         this.messageCallback = null;
         this.notificacionCallback = null;
         this.transactionManager = null;
+        this.userStore = new UserStore();
     }
 
     public GestorConsultas(Consumer<String> callback) {
         this.messageCallback = callback;
         this.notificacionCallback = null;
         this.transactionManager = null;
+        this.userStore = new UserStore();
     }
 
     public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback) {
         this.messageCallback = msgCallback;
         this.notificacionCallback = notifCallback;
         this.transactionManager = null;
+        this.userStore = new UserStore();
     }
 
     public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback, 
@@ -34,6 +38,7 @@ public class GestorConsultas {
         this.messageCallback = msgCallback;
         this.notificacionCallback = notifCallback;
         this.transactionManager = transactionManager;
+        this.userStore = new UserStore();
     }
 
     public String procesarConsulta(String consulta, User user) {
@@ -60,6 +65,10 @@ public class GestorConsultas {
             case "MORPH": return comandoMorph(tokens, user);
             case "SWEEP": return comandoSweep(tokens, user);
             case "REWRITE": return comandoRewrite(tokens, user);
+            // ========== NUEVOS COMANDOS DCL ==========
+            case "INVOKE": return comandoInvoke(tokens, user);
+            case "EMPOWER": return comandoEmpower(tokens, user);
+            case "DISARM": return comandoDisarm(tokens, user);
             default: return "ERROR: Comando desconocido '" + comando + "'";
         }
     }
@@ -105,6 +114,235 @@ public class GestorConsultas {
                "MORPH".equals(comando) || "SWEEP".equals(comando) || "REWRITE".equals(comando);
     }
 
+    // ========== NUEVOS COMANDOS DCL ==========
+
+    private String comandoInvoke(List<String> tokens, User user) {
+        // INVOKE USER username { password, role }
+        if (tokens.size() != 8) {
+            return "ERROR: Sintaxis incorrecta en INVOKE. Uso: INVOKE USER username { password, role }";
+        }
+
+        if (!"USER".equals(tokens.get(1))) {
+            return "ERROR: INVOKE debe ser seguido de USER";
+        }
+
+        String username = tokens.get(2);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return "ERROR: Nombre de usuario inválido: " + username;
+        }
+
+        if (!"{".equals(tokens.get(3))) {
+            return "ERROR: Falta '{' después del nombre de usuario";
+        }
+
+        String password = tokens.get(4);
+        // Remover comillas si las tiene
+        if ((password.startsWith("\"") && password.endsWith("\"")) ||
+            (password.startsWith("'") && password.endsWith("'"))) {
+            password = password.substring(1, password.length() - 1);
+        }
+
+        if (!",".equals(tokens.get(5))) {
+            return "ERROR: Falta ',' entre contraseña y rol";
+        }
+
+        String role = tokens.get(6);
+        if (!role.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return "ERROR: Nombre de rol inválido: " + role;
+        }
+
+        if (!"}".equals(tokens.get(7))) {
+            return "ERROR: Falta '}' al final del comando INVOKE";
+        }
+
+        // Validar rol
+        List<String> rolesValidos = List.of("READER", "WRITER", "MANAGER", "ADMIN", "OWNER");
+        if (!rolesValidos.contains(role.toUpperCase())) {
+            return "ERROR: Rol inválido: " + role + ". Roles válidos: " + rolesValidos;
+        }
+
+        // Verificar permisos del usuario actual
+        if (!tienePermisoAdministrativo(user)) {
+            return "ERROR: No tiene permisos para crear usuarios";
+        }
+
+        // Crear usuario
+        boolean exito = userStore.crearUsuario(username, password, role.toUpperCase());
+        
+        if (exito) {
+            enviarMensaje("Usuario creado: " + username + " con rol: " + role);
+            if (notificacionCallback != null) {
+                notificacionCallback.accept("Usuario '" + username + "' creado por " + user.getUsername());
+            }
+            return "OK: Usuario '" + username + "' creado con rol " + role;
+        } else {
+            return "ERROR: No se pudo crear el usuario '" + username + "' (¿ya existe?)";
+        }
+    }
+
+    private String comandoEmpower(List<String> tokens, User user) {
+        // EMPOWER username { privilegio1, privilegio2, ... }
+        if (tokens.size() < 5) {
+            return "ERROR: Sintaxis incorrecta en EMPOWER. Uso: EMPOWER username { privilegio1, privilegio2, ... }";
+        }
+
+        String username = tokens.get(1);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return "ERROR: Nombre de usuario inválido: " + username;
+        }
+
+        if (!"{".equals(tokens.get(2))) {
+            return "ERROR: Falta '{' después del nombre de usuario";
+        }
+
+        // Verificar permisos del usuario actual
+        if (!tienePermisoAdministrativo(user)) {
+            return "ERROR: No tiene permisos para otorgar privilegios";
+        }
+
+        List<String> privilegios = new ArrayList<>();
+        int i = 3;
+        
+        // Lista de privilegios válidos
+        List<String> privilegiosValidos = List.of(
+            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
+            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+        );
+
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String privilegio = tokens.get(i);
+            
+            if (!privilegiosValidos.contains(privilegio.toUpperCase())) {
+                return "ERROR: Privilegio inválido: " + privilegio + 
+                       ". Privilegios válidos: " + privilegiosValidos;
+            }
+            
+            privilegios.add(privilegio.toUpperCase());
+            i++;
+            
+            // Si hay coma, saltarla
+            if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                i++;
+            }
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i))) {
+            return "ERROR: Falta '}' al final del comando EMPOWER";
+        }
+
+        if (privilegios.isEmpty()) {
+            return "ERROR: Debe especificar al menos un privilegio";
+        }
+
+        // Aplicar privilegios al usuario
+        boolean todosExitosos = true;
+        List<String> privilegiosAplicados = new ArrayList<>();
+        
+        for (String privilegio : privilegios) {
+            boolean exito = userStore.agregarPrivilegio(username, privilegio);
+            if (exito) {
+                privilegiosAplicados.add(privilegio);
+            } else {
+                todosExitosos = false;
+            }
+        }
+
+        if (todosExitosos) {
+            enviarMensaje("Privilegios otorgados a " + username + ": " + privilegios);
+            if (notificacionCallback != null) {
+                notificacionCallback.accept("Privilegios otorgados a '" + username + "' por " + user.getUsername());
+            }
+            return "OK: Privilegios otorgados a '" + username + "': " + String.join(", ", privilegios);
+        } else {
+            return "ERROR: Algunos privilegios no se pudieron otorgar. Aplicados: " + String.join(", ", privilegiosAplicados);
+        }
+    }
+
+    private String comandoDisarm(List<String> tokens, User user) {
+        // DISARM username { privilegio1, privilegio2, ... }
+        if (tokens.size() < 5) {
+            return "ERROR: Sintaxis incorrecta en DISARM. Uso: DISARM username { privilegio1, privilegio2, ... }";
+        }
+
+        String username = tokens.get(1);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return "ERROR: Nombre de usuario inválido: " + username;
+        }
+
+        if (!"{".equals(tokens.get(2))) {
+            return "ERROR: Falta '{' después del nombre de usuario";
+        }
+
+        // Verificar permisos del usuario actual
+        if (!tienePermisoAdministrativo(user)) {
+            return "ERROR: No tiene permisos para quitar privilegios";
+        }
+
+        List<String> privilegios = new ArrayList<>();
+        int i = 3;
+        
+        // Lista de privilegios válidos
+        List<String> privilegiosValidos = List.of(
+            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
+            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+        );
+
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String privilegio = tokens.get(i);
+            
+            if (!privilegiosValidos.contains(privilegio.toUpperCase())) {
+                return "ERROR: Privilegio inválido: " + privilegio + 
+                       ". Privilegios válidos: " + privilegiosValidos;
+            }
+            
+            privilegios.add(privilegio.toUpperCase());
+            i++;
+            
+            // Si hay coma, saltarla
+            if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                i++;
+            }
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i))) {
+            return "ERROR: Falta '}' al final del comando DISARM";
+        }
+
+        if (privilegios.isEmpty()) {
+            return "ERROR: Debe especificar al menos un privilegio";
+        }
+
+        // Quitar privilegios al usuario
+        boolean todosExitosos = true;
+        List<String> privilegiosRemovidos = new ArrayList<>();
+        
+        for (String privilegio : privilegios) {
+            boolean exito = userStore.quitarPrivilegio(username, privilegio);
+            if (exito) {
+                privilegiosRemovidos.add(privilegio);
+            } else {
+                todosExitosos = false;
+            }
+        }
+
+        if (todosExitosos) {
+            enviarMensaje("Privilegios removidos de " + username + ": " + privilegios);
+            if (notificacionCallback != null) {
+                notificacionCallback.accept("Privilegios removidos de '" + username + "' por " + user.getUsername());
+            }
+            return "OK: Privilegios removidos de '" + username + "': " + String.join(", ", privilegios);
+        } else {
+            return "ERROR: Algunos privilegios no se pudieron remover. Removidos: " + String.join(", ", privilegiosRemovidos);
+        }
+    }
+
+    private boolean tienePermisoAdministrativo(User user) {
+        // Verificar si el usuario tiene permisos de administración
+        List<String> roles = user.getRoles();
+        return roles.contains("ADMIN") || roles.contains("OWNER") || 
+               roles.contains("SUPERUSER") || roles.stream().anyMatch(r -> r.contains("GRANT"));
+    }
+
     // Método para obtener esquemas jerárquicos
     public String obtenerEsquemasJerarquicos() {
         try {
@@ -136,7 +374,7 @@ public class GestorConsultas {
         }
     }
 
-    // ========== NUEVO TOKENIZADOR NUEVO ==========
+    // ========== TOKENIZADOR ==========
     private List<String> tokenizar(String consulta) {
         List<String> tokens = new ArrayList<>();
 
@@ -281,7 +519,6 @@ public class GestorConsultas {
         enviarMensaje(msg);
         return msg;
     }
-
 
     private String comandoBring(List<String> tokens, User user) {
         if (tokens.size() < 2)
@@ -647,7 +884,6 @@ public class GestorConsultas {
         }
     }
 
-    
     private String comandoBurn(List<String> tokens, User user) {
         if (tokens.size() < 3) {
             String msg = "ERROR: Sintaxis BURN inválida.";
@@ -801,7 +1037,6 @@ public class GestorConsultas {
         return false;
     }
 
-    
     // ===== COMANDO MORPH =====
     private String comandoMorph(List<String> tokens, User user) {
         if (user.getBaseActiva() == null)

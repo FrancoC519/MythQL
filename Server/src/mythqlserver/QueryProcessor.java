@@ -1,6 +1,7 @@
 package mythqlserver;
 
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -10,6 +11,7 @@ public class QueryProcessor {
     private GestorConsultas gestorConsultas;
     private Consumer<String> logCallback;
     private TransactionManager transactionManager;
+    private UserStore userStore;
 
     public QueryProcessor(Map<String, User> sesiones, NotificationManager notificationManager, 
                          Consumer<String> logCallback, TransactionManager transactionManager) {
@@ -17,6 +19,7 @@ public class QueryProcessor {
         this.notificationManager = notificationManager;
         this.logCallback = logCallback;
         this.transactionManager = transactionManager;
+        this.userStore = new UserStore();
         
         // Si transactionManager es null, crear uno temporal para evitar NullPointerException
         if (this.transactionManager == null) {
@@ -36,6 +39,13 @@ public class QueryProcessor {
         }
 
         log("Consulta de " + user.getUsername() + ": " + consulta);
+        
+        // VERIFICAR PERMISOS ANTES DE EJECUTAR
+        if (!tienePermisoParaConsulta(user, consulta)) {
+            out.println("ERROR: Permiso denegado para ejecutar: " + consulta);
+            log("Permiso denegado para " + user.getUsername() + ": " + consulta);
+            return;
+        }
         
         // VERIFICAR SI ES UN COMANDO DE TRANSACCIÓN
         String comando = consulta.trim().toUpperCase();
@@ -71,6 +81,41 @@ public class QueryProcessor {
         }
     }
     
+    private boolean tienePermisoParaConsulta(User user, String consulta) {
+        String comando = consulta.trim().toUpperCase().split(" ")[0];
+        List<String> roles = user.getRoles();
+        
+        // Mapeo de comandos a permisos requeridos
+        Map<String, List<String>> permisosRequeridos = Map.of(
+            "BRING", List.of("SELECT", "READER", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "FILE", List.of("INSERT", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "REWRITE", List.of("UPDATE", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "SUMMON", List.of("CREATE", "MANAGER", "ADMIN", "OWNER"),
+            "BURN", List.of("DROP", "MANAGER", "ADMIN", "OWNER"),
+            "MORPH", List.of("ALTER", "MANAGER", "ADMIN", "OWNER"),
+            "SWEEP", List.of("DELETE", "MANAGER", "ADMIN", "OWNER"),
+            "INVOKE", List.of("GRANT", "ADMIN", "OWNER"),
+            "EMPOWER", List.of("GRANT", "ADMIN", "OWNER"),
+            "DISARM", List.of("REVOKE", "ADMIN", "OWNER")
+        );
+        
+        List<String> permisosNecesarios = permisosRequeridos.getOrDefault(comando, List.of());
+        
+        // Si no hay permisos definidos para el comando, permitir por defecto
+        if (permisosNecesarios.isEmpty()) {
+            return true;
+        }
+        
+        // Verificar si el usuario tiene al menos uno de los permisos requeridos
+        for (String permiso : permisosNecesarios) {
+            if (roles.contains(permiso.toUpperCase())) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     private void manejarStart(String token, User user, PrintWriter out) {
         if (transactionManager == null) {
             out.println("RESULT ERROR: Sistema de transacciones no disponible");

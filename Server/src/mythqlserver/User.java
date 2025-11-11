@@ -20,6 +20,14 @@ public class User {
     public List<String> getRoles() { return roles; }
     public String getToken() { return token; }
 
+    public boolean tienePrivilegio(String privilegio) {
+        return roles.contains(privilegio.toUpperCase());
+    }
+
+    public boolean tieneRol(String rol) {
+        return roles.contains(rol.toUpperCase());
+    }
+
     @Override
     public String toString() {
         return "User{" + "username='" + username + '\'' + ", roles=" + roles + '}';

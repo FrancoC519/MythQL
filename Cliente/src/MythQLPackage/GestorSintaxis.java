@@ -37,18 +37,19 @@ public class GestorSintaxis {
             case "SWEEP":    return comandoSweep(tokens);
             case "MORPH":    return comandoMorph(tokens);
             case "REWRITE":  return comandoRewrite(tokens);
-            // ========== NUEVOS COMANDOS DE TRANSACCIÓN ==========
             case "START":    return comandoStart(tokens);
             case "SEAL":     return comandoSeal(tokens);
             case "UNDO":     return comandoUndo(tokens);
-            // ===================================================
+            case "INVOKE":   return comandoInvoke(tokens);
+            case "EMPOWER":  return comandoEmpower(tokens);
+            case "DISARM":   return comandoDisarm(tokens);
             default:
                 System.out.println("Comando desconocido: " + comando);
                 return false;
         }
     }
     
-    // ========== NUEVO TOKENIZADOR NUEVO ==========
+    // ========== TOKENIZADOR ==========
     private List<String> tokenizar(String consulta) {
         List<String> tokens = new ArrayList<>();
 
@@ -80,7 +81,172 @@ public class GestorSintaxis {
         return tokens;
     }
 
-    // ========== NUEVOS COMANDOS DE TRANSACCIÓN ==========
+
+    // ========== INVOKE ==========
+    public Boolean comandoInvoke(List<String> tokens) {
+
+        if (!"USER".equals(tokens.get(1))) {
+            return error("INVOKE debe ser seguido de USER");
+        }
+
+        String username = tokens.get(2);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return error("Nombre de usuario inválido: " + username);
+        }
+
+        if (!"{".equals(tokens.get(3))) {
+            return error("Falta '{' después del nombre de usuario");
+        }
+
+        String password = tokens.get(4);
+        // Validar que password sea string entre comillas o palabra válida
+        if (!(password.matches("[A-Za-z0-9_]+") || 
+              (password.startsWith("\"") && password.endsWith("\"")) ||
+              (password.startsWith("'") && password.endsWith("'")))) {
+            return error("Contraseña inválida. Debe ser alfanumérica o estar entre comillas");
+        }
+
+        // Remover comillas si las tiene
+        if ((password.startsWith("\"") && password.endsWith("\"")) ||
+            (password.startsWith("'") && password.endsWith("'"))) {
+            password = password.substring(1, password.length() - 1);
+        }
+
+        if (!",".equals(tokens.get(5))) {
+            return error("Falta ',' entre contraseña y rol");
+        }
+
+        String role = tokens.get(6);
+        if (!role.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return error("Nombre de rol inválido: " + role);
+        }
+
+        if (!"}".equals(tokens.get(7))) {
+            return error("Falta '}' al final del comando INVOKE");
+        }
+
+        // Validar rol
+        List<String> rolesValidos = List.of("READER", "WRITER", "MANAGER", "ADMIN", "OWNER");
+        if (!rolesValidos.contains(role.toUpperCase())) {
+            return error("Rol inválido: " + role + ". Roles válidos: " + rolesValidos);
+        }
+
+        System.out.println("Comando INVOKE USER detectado: " + username + 
+                         " con contraseña: " + password + " y rol: " + role);
+        return true;
+    }
+
+    // ========== EMPOWER ==========
+    public Boolean comandoEmpower(List<String> tokens) {
+        // EMPOWER username { privilegio1, privilegio2, ... }
+        if (tokens.size() < 5) {
+            return error("Sintaxis incorrecta en EMPOWER. Uso: EMPOWER username { privilegio1, privilegio2, ... }");
+        }
+
+        String username = tokens.get(1);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return error("Nombre de usuario inválido: " + username);
+        }
+
+        if (!"{".equals(tokens.get(2))) {
+            return error("Falta '{' después del nombre de usuario");
+        }
+
+        List<String> privilegios = new ArrayList<>();
+        int i = 3;
+        
+        // Lista de privilegios válidos
+        List<String> privilegiosValidos = List.of(
+            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
+            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+        );
+
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String privilegio = tokens.get(i);
+            
+            if (!privilegiosValidos.contains(privilegio.toUpperCase())) {
+                return error("Privilegio inválido: " + privilegio + 
+                           ". Privilegios válidos: " + privilegiosValidos);
+            }
+            
+            privilegios.add(privilegio.toUpperCase());
+            i++;
+            
+            // Si hay coma, saltarla
+            if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                i++;
+            }
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i))) {
+            return error("Falta '}' al final del comando EMPOWER");
+        }
+
+        if (privilegios.isEmpty()) {
+            return error("Debe especificar al menos un privilegio");
+        }
+
+        System.out.println("Comando EMPOWER detectado para usuario: " + username + 
+                         " con privilegios: " + privilegios);
+        return true;
+    }
+
+    // ========== DISARM ==========
+    public Boolean comandoDisarm(List<String> tokens) {
+        // DISARM username { privilegio1, privilegio2, ... }
+        if (tokens.size() < 5) {
+            return error("Sintaxis incorrecta en DISARM. Uso: DISARM username { privilegio1, privilegio2, ... }");
+        }
+
+        String username = tokens.get(1);
+        if (!username.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            return error("Nombre de usuario inválido: " + username);
+        }
+
+        if (!"{".equals(tokens.get(2))) {
+            return error("Falta '{' después del nombre de usuario");
+        }
+
+        List<String> privilegios = new ArrayList<>();
+        int i = 3;
+        
+        // Lista de privilegios válidos (misma que en EMPOWER)
+        List<String> privilegiosValidos = List.of(
+            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
+            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+        );
+
+        while (i < tokens.size() && !"}".equals(tokens.get(i))) {
+            String privilegio = tokens.get(i);
+            
+            if (!privilegiosValidos.contains(privilegio.toUpperCase())) {
+                return error("Privilegio inválido: " + privilegio + 
+                           ". Privilegios válidos: " + privilegiosValidos);
+            }
+            
+            privilegios.add(privilegio.toUpperCase());
+            i++;
+            
+            // Si hay coma, saltarla
+            if (i < tokens.size() && ",".equals(tokens.get(i))) {
+                i++;
+            }
+        }
+
+        if (i >= tokens.size() || !"}".equals(tokens.get(i))) {
+            return error("Falta '}' al final del comando DISARM");
+        }
+
+        if (privilegios.isEmpty()) {
+            return error("Debe especificar al menos un privilegio");
+        }
+
+        System.out.println("Comando DISARM detectado para usuario: " + username + 
+                         " removiendo privilegios: " + privilegios);
+        return true;
+    }
+
+    // ========== COMANDOS DE TRANSACCIÓN ==========
 
     // ========== START ==========
     public Boolean comandoStart(List<String> tokens) {

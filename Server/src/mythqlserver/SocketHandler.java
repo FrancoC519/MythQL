@@ -10,15 +10,17 @@ public class SocketHandler implements Runnable {
     private QueryProcessor queryProcessor;
     private NotificationManager notificationManager;
     private Map<String, User> sesiones;
+    private TransactionManager transactionManager;
     
     public SocketHandler(Socket socket, LoginManager loginManager, 
                         QueryProcessor queryProcessor, NotificationManager notificationManager,
-                        Map<String, User> sesiones) {
+                        Map<String, User> sesiones, TransactionManager transactionManager) {
         this.socket = socket;
         this.loginManager = loginManager;
         this.queryProcessor = queryProcessor;
         this.notificationManager = notificationManager;
         this.sesiones = sesiones;
+        this.transactionManager = transactionManager;
     }
     
     public void run() {
@@ -68,8 +70,11 @@ public class SocketHandler implements Runnable {
                             out.println("ERROR Uso: LOGOUT token");
                             break;
                         }
+                        // LIMPIAR DATOS DE TRANSACCIÓN ANTES DE LOGOUT
+                        if (transactionManager != null) {
+                            transactionManager.cleanupUserData(partes[1]);
+                        }
                         notificationManager.desuscribirCliente(partes[1]);
-                        // También remover de sesiones
                         User removedUser = sesiones.remove(partes[1]);
                         if (removedUser != null) {
                             System.out.println("Usuario deslogueado: " + removedUser.getUsername());

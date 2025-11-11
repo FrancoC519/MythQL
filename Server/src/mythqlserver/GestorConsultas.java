@@ -9,27 +9,46 @@ public class GestorConsultas {
     private final String dbPath = "Databases/";
     private Consumer<String> messageCallback;
     private Consumer<String> notificacionCallback;
+    private TransactionManager transactionManager;
 
-    public GestorConsultas() { 
-        this.messageCallback = null; 
+    public GestorConsultas() {
+        this.messageCallback = null;
         this.notificacionCallback = null;
+        this.transactionManager = null;
     }
-    
-    public GestorConsultas(Consumer<String> callback) { 
-        this.messageCallback = callback; 
+
+    public GestorConsultas(Consumer<String> callback) {
+        this.messageCallback = callback;
         this.notificacionCallback = null;
+        this.transactionManager = null;
     }
-    
-    public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback) { 
+
+    public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback) {
         this.messageCallback = msgCallback;
         this.notificacionCallback = notifCallback;
+        this.transactionManager = null;
+    }
+
+    public GestorConsultas(Consumer<String> msgCallback, Consumer<String> notifCallback, 
+                          TransactionManager transactionManager) {
+        this.messageCallback = msgCallback;
+        this.notificacionCallback = notifCallback;
+        this.transactionManager = transactionManager;
     }
 
     public String procesarConsulta(String consulta, User user) {
         List<String> tokens = tokenizar(consulta);
         if (tokens.isEmpty()) return "ERROR: Consulta vacía.";
+        
         String comando = tokens.get(0).toUpperCase();
         enviarMensaje("Comando recibido: " + comando);
+        
+        // ANTES de ejecutar comandos que modifican, hacer backup si hay transacción activa
+        if (esConsultaQueModifica(comando) && transactionManager != null) {
+            String database = user.getBaseActiva();
+            String table = extraerTablaDeConsulta(tokens, comando);
+            transactionManager.backupBeforeModification(user.getToken(), database, table);
+        }
         switch (comando) {
             case "SUMMON": return comandoSummon(tokens, user);
             case "UTILIZE": return comandoUtilize(tokens, user);
@@ -43,6 +62,47 @@ public class GestorConsultas {
             case "REWRITE": return comandoRewrite(tokens, user);
             default: return "ERROR: Comando desconocido '" + comando + "'";
         }
+    }
+    
+    private String extraerTablaDeConsulta(List<String> tokens, String comando) {
+        switch (comando) {
+            case "SUMMON":
+                if (tokens.size() > 2 && "TABLE".equals(tokens.get(1))) {
+                    return tokens.get(2);
+                }
+                break;
+            case "BURN":
+                if (tokens.size() > 2 && "TABLE".equals(tokens.get(1))) {
+                    return tokens.get(2);
+                }
+                break;
+            case "FILE":
+                if (tokens.size() > 1) {
+                    return tokens.get(1);
+                }
+                break;
+            case "MORPH":
+                if (tokens.size() > 1) {
+                    return tokens.get(1);
+                }
+                break;
+            case "SWEEP":
+                if (tokens.size() > 1) {
+                    return tokens.get(1);
+                }
+                break;
+            case "REWRITE":
+                if (tokens.size() > 1) {
+                    return tokens.get(1);
+                }
+                break;
+        }
+        return null;
+    }
+    
+    private boolean esConsultaQueModifica(String comando) {
+        return "SUMMON".equals(comando) || "BURN".equals(comando) || "FILE".equals(comando) ||
+               "MORPH".equals(comando) || "SWEEP".equals(comando) || "REWRITE".equals(comando);
     }
 
     // Método para obtener esquemas jerárquicos

@@ -557,20 +557,51 @@ public class MythQL_UI extends JFrame {
                         String respuestaServidor = clienteConsultas.enviarConsultaConToken(token, comando);
 
                         logMessageWithoutEnter("Respuesta del servidor: ", Color.WHITE);
-                        if (respuestaServidor.startsWith("RESULT ERROR")) {
-                            logMessage(respuestaServidor, Color.RED);
-                        } else {
-                            if (comando.toUpperCase().startsWith("BRING")) {
-                                mostrarTablaBring(respuestaServidor);
-                            } else {
-                                logMessage(respuestaServidor, Color.GREEN);
-                            }
 
-                            if (comando.toUpperCase().startsWith("SUMMON") || 
-                                comando.toUpperCase().startsWith("BURN") ||
-                                comando.toUpperCase().startsWith("UTILIZE")) {
-                                cargarEsquemasJerarquicos();
+                        // ========== MANEJO DE RESPUESTAS DE TRANSACCIONES ==========
+                        String comandoUpper = comando.toUpperCase();
+
+                        if (respuestaServidor.startsWith("RESULT ERROR") || respuestaServidor.startsWith("ERROR")) {
+                            logMessage(respuestaServidor, Color.RED);
+                        } else if (comandoUpper.startsWith("BRING")) {
+                            mostrarTablaBring(respuestaServidor);
+                        } else if (comandoUpper.startsWith("START")) {
+                            // Respuesta para START
+                            if (respuestaServidor.startsWith("OK")) {
+                                logMessage("✅ " + respuestaServidor, Color.CYAN);
+                            } else {
+                                logMessage(respuestaServidor, Color.ORANGE);
                             }
+                        } else if (comandoUpper.startsWith("SEAL")) {
+                            // Respuesta para SEAL
+                            if (respuestaServidor.startsWith("OK")) {
+                                logMessage("🔒 " + respuestaServidor, Color.CYAN);
+                            } else {
+                                logMessage(respuestaServidor, Color.ORANGE);
+                            }
+                        } else if (comandoUpper.startsWith("UNDO")) {
+                            // Respuesta para UNDO
+                            if (respuestaServidor.startsWith("OK")) {
+                                logMessage("↩️ " + respuestaServidor, Color.CYAN);
+                            } else {
+                                logMessage(respuestaServidor, Color.ORANGE);
+                            }
+                        } else {
+                            // Para otros comandos (SUMMON, BURN, FILE, etc.)
+                            logMessage(respuestaServidor, Color.GREEN);
+                        }
+
+                        // ========== ACTUALIZAR ESQUEMAS PARA COMANDOS QUE MODIFICAN ==========
+                        if (comandoUpper.startsWith("SUMMON") || 
+                            comandoUpper.startsWith("BURN") ||
+                            comandoUpper.startsWith("UTILIZE") ||
+                            comandoUpper.startsWith("FILE") || 
+                            comandoUpper.startsWith("MORPH") ||
+                            comandoUpper.startsWith("SWEEP") ||
+                            comandoUpper.startsWith("REWRITE") ||
+                            comandoUpper.startsWith("UNDO")) {  // UNDO puede modificar el estado
+
+                            cargarEsquemasJerarquicos();
                         }
 
                         Thread.sleep(150);
@@ -836,22 +867,14 @@ private void mostrarWizard(String errorMsg) {
 
         JPanel panelUsuarios = crearPanelUsuarios();
         JPanel panelPrivilegios = crearPanelPrivilegios();
-        JPanel panelPuertos = crearPanelPuertos();
-        JPanel panelComandos = crearPanelComandos();
-        JPanel panelSeguridad = crearPanelSeguridad();
-        JPanel panelRespaldos = crearPanelRespaldos();
 
         panelContenido.add(panelUsuarios, "Usuarios");
         panelContenido.add(panelPrivilegios, "Privilegios");
-        panelContenido.add(panelPuertos, "Puertos");
-        panelContenido.add(panelComandos, "Comandos");
-        panelContenido.add(panelSeguridad, "Seguridad");
-        panelContenido.add(panelRespaldos, "Respaldos");
 
         CardLayout cardLayout = (CardLayout) panelContenido.getLayout();
 
-        String[] opciones = {"Usuarios", "Privilegios", "Puertos", "Comandos", "Seguridad", "Respaldos"};
-        String[] iconos = {"👤⚙", "🔐⚙", "🔌⚙", "⚙", "🛡⚙", "💾⚙"};
+        String[] opciones = {"Usuarios", "Privilegios"};
+        String[] iconos = {"👤⚙", "🔐⚙"};
 
         for (int i = 0; i < opciones.length; i++) {
             String opcion = opciones[i];
@@ -1092,361 +1115,6 @@ private void mostrarWizard(String errorMsg) {
         }
 
         panel.add(checkPanel, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel crearPanelPuertos() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
-
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
-
-        JLabel titulo = new JLabel("🔌⚙ CONFIGURACIÓN DE RED Y PUERTOS");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(108, 44, 120));
-
-        headerPanel.add(titulo, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
-
-        JPanel contenido = new JPanel();
-        contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
-        contenido.setBackground(Color.WHITE);
-        contenido.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-            BorderFactory.createEmptyBorder(20, 20, 20, 20)
-        ));
-
-        contenido.add(crearCampoConfig("Puerto Principal:", "5000"));
-        contenido.add(Box.createVerticalStrut(15));
-        contenido.add(crearCampoConfig("Puerto de Notificaciones:", "5001"));
-        contenido.add(Box.createVerticalStrut(15));
-        contenido.add(crearCampoConfig("Host del Servidor:", "localhost"));
-        contenido.add(Box.createVerticalStrut(15));
-        contenido.add(crearCampoConfig("Timeout de Conexión (ms):", "5000"));
-        contenido.add(Box.createVerticalStrut(15));
-        contenido.add(crearCampoConfig("Máximo de Conexiones:", "100"));
-
-        panel.add(contenido, BorderLayout.CENTER);
-
-        // Botones
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        panelBotones.setBackground(new Color(242, 242, 242));
-        panelBotones.add(crearBotonRobusto("🔄⚙Reiniciar Servidor", new Color(255, 140, 0)));
-        panelBotones.add(crearBotonRobusto("💾⚙Guardar Configuración", new Color(34, 139, 34)));
-
-        panel.add(panelBotones, BorderLayout.SOUTH);
-
-        return panel;
-    }
-
-    private JPanel crearCampoConfig(String etiqueta, String valorDefault) {
-        JPanel panel = new JPanel(new BorderLayout(10, 0));
-        panel.setBackground(Color.WHITE);
-        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-
-        JLabel lbl = new JLabel(etiqueta);
-        lbl.setFont(new Font("Arial", Font.BOLD, 13));
-        lbl.setPreferredSize(new Dimension(250, 30));
-
-        JTextField txt = new JTextField(valorDefault);
-        txt.setFont(new Font("Arial", Font.PLAIN, 13));
-        txt.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(180, 180, 180), 1),
-            BorderFactory.createEmptyBorder(5, 10, 5, 10)
-        ));
-
-        panel.add(lbl, BorderLayout.WEST);
-        panel.add(txt, BorderLayout.CENTER);
-
-        return panel;
-    }
-
-    private JPanel crearPanelComandos() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
-
-        // Header
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
-
-        JLabel titulo = new JLabel("⚙ PERSONALIZACIÓN DE COMANDOS");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(108, 44, 120));
-
-        headerPanel.add(titulo, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
-
-        JPanel contenido = new JPanel(new BorderLayout(15, 15));
-        contenido.setBackground(Color.WHITE);
-        contenido.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-            BorderFactory.createEmptyBorder(20, 20, 20, 20)
-        ));
-
-        String[] columnNames = {"Comando Original", "Alias", "Descripción", "Estado"};
-        Object[][] data = {
-            {"SUMMON", "CREATE", "Crear base de datos/tabla", "Activo"},
-            {"BURN", "DROP", "Eliminar objetos", "Activo"},
-            {"BRING", "SELECT", "Consultar datos", "Activo"},
-            {"MANIFEST", "INSERT", "Insertar registros", "Activo"},
-            {"UTILIZE", "USE", "Seleccionar base de datos", "Activo"}
-        };
-
-        JTable tablaComandos = new JTable(data, columnNames);
-        tablaComandos.setRowHeight(30);
-        tablaComandos.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        tablaComandos.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
-        tablaComandos.getTableHeader().setBackground(new Color(108, 44, 120));
-        tablaComandos.getTableHeader().setForeground(Color.WHITE);
-
-        JScrollPane scrollTabla = new JScrollPane(tablaComandos);
-        scrollTabla.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180)));
-
-        contenido.add(scrollTabla, BorderLayout.CENTER);
-
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
-        panelBotones.setBackground(Color.WHITE);
-        panelBotones.add(crearBotonRobusto("✏️ Editar Alias", new Color(30, 144, 255)));
-        panelBotones.add(crearBotonRobusto("🔄 Restaurar Predeterminados", new Color(255, 140, 0)));
-
-        contenido.add(panelBotones, BorderLayout.SOUTH);
-        panel.add(contenido, BorderLayout.CENTER);
-
-        return panel;
-    }
-
-    private JPanel crearPanelSeguridad() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
-
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(139, 0, 0)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
-
-        JLabel titulo = new JLabel("🛡⚙ CONFIGURACIÓN DE SEGURIDAD");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(139, 0, 0));
-
-        headerPanel.add(titulo, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
-
-        JPanel contenido = new JPanel(new GridLayout(2, 2, 15, 15));
-        contenido.setBackground(new Color(242, 242, 242));
-
-        contenido.add(crearTarjetaSeguridad("🔒⚙ Encriptación", new String[]{
-            "SSL/TLS Habilitado",
-            "Encriptación de Datos",
-            "Certificados Válidos"
-        }));
-
-        contenido.add(crearTarjetaSeguridad("📝⚙ Auditoría", new String[]{
-            "Log de Consultas",
-            "Log de Accesos",
-            "Log de Errores"
-        }));
-
-        contenido.add(crearTarjetaSeguridad("🔑⚙ Autenticación", new String[]{
-            "Autenticación 2FA",
-            "Tokens de Sesión",
-            "Expiración Automática"
-        }));
-
-        contenido.add(crearTarjetaSeguridad("⚙ Protección", new String[]{
-            "Anti-Fuerza Bruta",
-            "Límite de Intentos",
-            "Bloqueo Temporal"
-        }));
-
-        panel.add(contenido, BorderLayout.CENTER);
-
-        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        panelBoton.setBackground(new Color(242, 242, 242));
-        panelBoton.add(crearBotonRobusto("💾⚙ Guardar Configuración de Seguridad", new Color(139, 0, 0)));
-
-        panel.add(panelBoton, BorderLayout.SOUTH);
-
-        return panel;
-    }
-
-    private JPanel crearTarjetaSeguridad(String titulo, String[] opciones) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 2),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
-
-        JLabel lblTitulo = new JLabel(titulo);
-        lblTitulo.setFont(new Font("Arial", Font.BOLD, 14));
-        lblTitulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-
-        panel.add(lblTitulo, BorderLayout.NORTH);
-
-        JPanel checkPanel = new JPanel(new GridLayout(0, 1, 5, 5));
-        checkPanel.setBackground(Color.WHITE);
-
-        for (String opcion : opciones) {
-            JCheckBox chk = new JCheckBox(opcion);
-            chk.setFont(new Font("Arial", Font.PLAIN, 12));
-            chk.setBackground(Color.WHITE);
-            chk.setFocusPainted(false);
-            checkPanel.add(chk);
-        }
-
-        panel.add(checkPanel, BorderLayout.CENTER);
-        return panel;
-    }
-
-    private JPanel crearPanelRespaldos() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
-
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
-
-        JLabel titulo = new JLabel("💾⚙ RESPALDOS Y RECUPERACIÓN");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(108, 44, 120));
-
-        headerPanel.add(titulo, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
-
-        JPanel contenidoPrincipal = new JPanel(new BorderLayout(15, 15));
-        contenidoPrincipal.setBackground(new Color(242, 242, 242));
-
-        JPanel panelConfiguracion = new JPanel();
-        panelConfiguracion.setLayout(new BoxLayout(panelConfiguracion, BoxLayout.Y_AXIS));
-        panelConfiguracion.setBackground(Color.WHITE);
-        panelConfiguracion.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-                "Configuración de Respaldos Automáticos",
-                javax.swing.border.TitledBorder.LEFT,
-                javax.swing.border.TitledBorder.TOP,
-                new Font("Arial", Font.BOLD, 13),
-                new Color(108, 44, 120)
-            ),
-            BorderFactory.createEmptyBorder(15, 15, 15, 15)
-        ));
-
-        JPanel panelFrecuencia = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        panelFrecuencia.setBackground(Color.WHITE);
-        panelFrecuencia.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-
-        JLabel lblFrecuencia = new JLabel("Frecuencia:");
-        lblFrecuencia.setFont(new Font("Arial", Font.BOLD, 13));
-
-        String[] frecuencias = {"Manual", "Cada Hora", "Diario", "Semanal", "Mensual"};
-        JComboBox<String> comboFrecuencia = new JComboBox<>(frecuencias);
-        comboFrecuencia.setFont(new Font("Arial", Font.PLAIN, 13));
-        comboFrecuencia.setPreferredSize(new Dimension(200, 30));
-
-        panelFrecuencia.add(lblFrecuencia);
-        panelFrecuencia.add(comboFrecuencia);
-
-        JPanel panelRuta = new JPanel(new BorderLayout(10, 0));
-        panelRuta.setBackground(Color.WHITE);
-        panelRuta.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-
-        JLabel lblRuta = new JLabel("Ruta de Respaldos:");
-        lblRuta.setFont(new Font("Arial", Font.BOLD, 13));
-        lblRuta.setPreferredSize(new Dimension(150, 30));
-
-        JTextField txtRuta = new JTextField("C:/MythQL/Backups/");
-        txtRuta.setFont(new Font("Arial", Font.PLAIN, 13));
-        txtRuta.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(180, 180, 180), 1),
-            BorderFactory.createEmptyBorder(5, 10, 5, 10)
-        ));
-
-        JButton btnExplorar = new JButton("📁 Explorar");
-        btnExplorar.setFont(new Font("Arial", Font.PLAIN, 12));
-        btnExplorar.setPreferredSize(new Dimension(100, 30));
-        btnExplorar.setFocusPainted(false);
-
-        panelRuta.add(lblRuta, BorderLayout.WEST);
-        panelRuta.add(txtRuta, BorderLayout.CENTER);
-        panelRuta.add(btnExplorar, BorderLayout.EAST);
-
-        panelConfiguracion.add(panelFrecuencia);
-        panelConfiguracion.add(Box.createVerticalStrut(10));
-        panelConfiguracion.add(panelRuta);
-
-        JPanel panelHistorial = new JPanel(new BorderLayout(10, 10));
-        panelHistorial.setBackground(Color.WHITE);
-        panelHistorial.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-                "Historial de Respaldos",
-                javax.swing.border.TitledBorder.LEFT,
-                javax.swing.border.TitledBorder.TOP,
-                new Font("Arial", Font.BOLD, 13),
-                new Color(108, 44, 120)
-            ),
-            BorderFactory.createEmptyBorder(10, 10, 10, 10)
-        ));
-
-        String[] columnNames = {"Fecha", "Hora", "Tamaño", "Base de Datos", "Estado"};
-        Object[][] data = {
-            {"2025-10-21", "14:30:00", "245 MB", "MythDB_Principal", "✓ Exitoso"},
-            {"2025-10-21", "12:00:00", "198 MB", "MythDB_Principal", "✓ Exitoso"},
-            {"2025-10-20", "14:30:00", "240 MB", "MythDB_Principal", "✓ Exitoso"},
-            {"2025-10-19", "14:30:00", "235 MB", "MythDB_Principal", "✓ Exitoso"},
-            {"2025-10-18", "14:30:00", "230 MB", "MythDB_Principal", "⚠ Advertencia"}
-        };
-
-        JTable tablaRespaldos = new JTable(data, columnNames);
-        tablaRespaldos.setRowHeight(28);
-        tablaRespaldos.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        tablaRespaldos.getTableHeader().setFont(new Font("Arial", Font.BOLD, 12));
-        tablaRespaldos.getTableHeader().setBackground(new Color(108, 44, 120));
-        tablaRespaldos.getTableHeader().setForeground(Color.WHITE);
-        tablaRespaldos.setSelectionBackground(new Color(200, 180, 210));
-
-        JScrollPane scrollTabla = new JScrollPane(tablaRespaldos);
-        scrollTabla.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180)));
-        scrollTabla.setPreferredSize(new Dimension(0, 150));
-
-        panelHistorial.add(scrollTabla, BorderLayout.CENTER);
-
-        contenidoPrincipal.add(panelConfiguracion, BorderLayout.NORTH);
-        contenidoPrincipal.add(panelHistorial, BorderLayout.CENTER);
-
-        panel.add(contenidoPrincipal, BorderLayout.CENTER);
-
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        panelBotones.setBackground(new Color(242, 242, 242));
-
-        JButton btnCrearBackup = crearBotonRobusto("💾⚙Crear Respaldo Ahora", new Color(34, 139, 34));
-        JButton btnRestaurar = crearBotonRobusto("⚙Restaurar desde Respaldo", new Color(255, 140, 0));
-        JButton btnEliminarBackup = crearBotonRobusto("🗑⚙Eliminar Respaldo", new Color(220, 20, 60));
-
-        panelBotones.add(btnCrearBackup);
-        panelBotones.add(btnRestaurar);
-        panelBotones.add(btnEliminarBackup);
-
-        panel.add(panelBotones, BorderLayout.SOUTH);
-
         return panel;
     }
 

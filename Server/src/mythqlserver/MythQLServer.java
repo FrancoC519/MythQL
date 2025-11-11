@@ -15,6 +15,7 @@ public class MythQLServer {
     // Managers
     private NotificationManager notificationManager;
     private LoginManager loginManager;
+    private TransactionManager transactionManager;
     private QueryProcessor queryProcessor;
 
     public MythQLServer(int port) {
@@ -35,9 +36,10 @@ public class MythQLServer {
         
         this.notificationManager = new NotificationManager(logCallback);
         this.loginManager = new LoginManager(userStore, sesiones, logCallback);
-        this.queryProcessor = new QueryProcessor(sesiones, notificationManager, logCallback);
+        this.transactionManager = new TransactionManager(logCallback); // INICIALIZAR PRIMERO
+        this.queryProcessor = new QueryProcessor(sesiones, notificationManager, logCallback, transactionManager);
         
-        log("Managers inicializados: Login, Query, Notification", java.awt.Color.GREEN);
+        log("Managers inicializados: Login, Query, Notification, Transaction", java.awt.Color.GREEN);
     }
 
     public void start() {
@@ -54,7 +56,8 @@ public class MythQLServer {
                     loginManager, 
                     queryProcessor, 
                     notificationManager,
-                    sesiones
+                    sesiones,
+                    transactionManager
                 );
 
                 new Thread(handler).start();
@@ -85,6 +88,7 @@ public class MythQLServer {
             System.out.println(msg);
         }
     }
+    
     private void logToUI(String msg) {
         log(msg, java.awt.Color.WHITE); // Color por defecto
     }

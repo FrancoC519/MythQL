@@ -37,6 +37,11 @@ public class GestorSintaxis {
             case "SWEEP":    return comandoSweep(tokens);
             case "MORPH":    return comandoMorph(tokens);
             case "REWRITE":  return comandoRewrite(tokens);
+            // ========== NUEVOS COMANDOS DE TRANSACCIÓN ==========
+            case "START":    return comandoStart(tokens);
+            case "SEAL":     return comandoSeal(tokens);
+            case "UNDO":     return comandoUndo(tokens);
+            // ===================================================
             default:
                 System.out.println("Comando desconocido: " + comando);
                 return false;
@@ -75,6 +80,45 @@ public class GestorSintaxis {
         return tokens;
     }
 
+    // ========== NUEVOS COMANDOS DE TRANSACCIÓN ==========
+
+    // ========== START ==========
+    public Boolean comandoStart(List<String> tokens) {
+        if (tokens.size() != 1) {
+            return error("Sintaxis incorrecta en START. Uso correcto: START");
+        }
+        System.out.println("Comando START detectado - Iniciando transacción");
+        return true;
+    }
+
+    // ========== SEAL ==========
+    public Boolean comandoSeal(List<String> tokens) {
+        if (tokens.size() != 1) {
+            return error("Sintaxis incorrecta en SEAL. Uso correcto: SEAL");
+        }
+        System.out.println("Comando SEAL detectado - Finalizando transacción");
+        return true;
+    }
+
+    // ========== UNDO ==========
+    public Boolean comandoUndo(List<String> tokens) {
+        if (tokens.size() > 2) {
+            return error("Sintaxis incorrecta en UNDO. Uso correcto: UNDO [numero]");
+        }
+        
+        if (tokens.size() == 1) {
+            System.out.println("Comando UNDO detectado - Revertiendo al último backup");
+            return true;
+        } else {
+            String numero = tokens.get(1);
+            if (numero.matches("\\d+")) {
+                System.out.println("Comando UNDO detectado - Revertiendo al backup número: " + numero);
+                return true;
+            } else {
+                return error("Número de backup inválido en UNDO: " + numero);
+            }
+        }
+    }
 
     // ========== UTILIZE ==========
     public Boolean comandoUtilize(List<String> tokens) {
@@ -171,7 +215,6 @@ public class GestorSintaxis {
 
         return error("Se esperaba DATABASE o TABLE después de SUMMON");
     }
-
 
     // ========== BURN ==========
     public Boolean comandoBurn(List<String> tokens) {
@@ -450,9 +493,6 @@ public class GestorSintaxis {
         return false;
     }
 
-
-
-    
     // ========== SWEEP ==========
     public Boolean comandoSweep(List<String> tokens) {
         if (tokens.size() != 2)

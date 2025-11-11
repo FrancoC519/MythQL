@@ -9,12 +9,22 @@ public class QueryProcessor {
     private NotificationManager notificationManager;
     private GestorConsultas gestorConsultas;
     private Consumer<String> logCallback;
+    private TransactionManager transactionManager;
 
-    public QueryProcessor(Map<String, User> sesiones, NotificationManager notificationManager, Consumer<String> logCallback) {
+    public QueryProcessor(Map<String, User> sesiones, NotificationManager notificationManager, 
+                         Consumer<String> logCallback, TransactionManager transactionManager) {
         this.sesiones = sesiones;
         this.notificationManager = notificationManager;
         this.logCallback = logCallback;
-        this.gestorConsultas = new GestorConsultas(this::log, this::notificarCambioGlobal);
+        this.transactionManager = transactionManager;
+        
+        // Si transactionManager es null, crear uno temporal para evitar NullPointerException
+        if (this.transactionManager == null) {
+            System.out.println("ADVERTENCIA: TransactionManager es null en QueryProcessor, creando uno temporal");
+            this.transactionManager = new TransactionManager(logCallback);
+        }
+        
+        this.gestorConsultas = new GestorConsultas(this::log, this::notificarCambioGlobal, this.transactionManager);
     }
 
     public void procesarQuery(String token, String consulta, PrintWriter out) {
@@ -26,6 +36,30 @@ public class QueryProcessor {
         }
 
         log("Consulta de " + user.getUsername() + ": " + consulta);
+        
+        // VERIFICAR SI ES UN COMANDO DE TRANSACCIÓN
+        String comando = consulta.trim().toUpperCase();
+        
+        if (comando.startsWith("START")) {
+            manejarStart(token, user, out);
+            return;
+        } else if (comando.startsWith("SEAL")) {
+            manejarSeal(token, user, out);
+            return;
+        } else if (comando.startsWith("UNDO")) {
+            manejarUndo(token, consulta, user, out);
+            return;
+        }
+        
+        // Para comandos normales que modifican, hacer backup si hay transacción activa
+        if (transactionManager != null && transactionManager.isTransactionActive(token) && 
+            esConsultaQueModifica(consulta)) {
+            
+            String database = user.getBaseActiva();
+            String table = extraerTablaDeConsulta(consulta);
+            transactionManager.backupBeforeModification(token, database, table);
+        }
+        
         String resultado = gestorConsultas.procesarConsulta(consulta, user);
         out.println("RESULT " + resultado);
         log("Resultado: " + resultado);
@@ -35,6 +69,102 @@ public class QueryProcessor {
             log("Notificando: " + notificacion);
             notificationManager.broadcastNotificacion(notificacion);
         }
+    }
+    
+    private void manejarStart(String token, User user, PrintWriter out) {
+        if (transactionManager == null) {
+            out.println("RESULT ERROR: Sistema de transacciones no disponible");
+            log("ERROR: TransactionManager es null en manejarStart");
+            return;
+        }
+        
+        boolean success = transactionManager.startTransaction(token, user);
+        if (success) {
+            out.println("RESULT OK: Transaction started");
+        } else {
+            out.println("RESULT ERROR: No se pudo iniciar transaccion o ya hay una activa");
+        }
+    }
+    
+    private void manejarSeal(String token, User user, PrintWriter out) {
+        if (transactionManager == null) {
+            out.println("RESULT ERROR: Sistema de transacciones no disponible");
+            log("ERROR: TransactionManager es null en manejarSeal");
+            return;
+        }
+        
+        boolean success = transactionManager.sealTransaction(token);
+        if (success) {
+            out.println("RESULT OK: Transaction sealed");
+        } else {
+            out.println("RESULT ERROR: No hay transaccion activa para seal");
+        }
+    }
+    
+    private void manejarUndo(String token, String consulta, User user, PrintWriter out) {
+        if (transactionManager == null) {
+            out.println("RESULT ERROR: Sistema de transacciones no disponible");
+            log("ERROR: TransactionManager es null en manejarUndo");
+            return;
+        }
+        
+        // Extraer número de UNDO si existe
+        String undoNumber = null;
+        String[] partes = consulta.trim().split("\\s+");
+        if (partes.length > 1) {
+            undoNumber = partes[1];
+            // Verificar que sea un número válido
+            if (!undoNumber.matches("\\d+")) {
+                undoNumber = null;
+            }
+        }
+        
+        boolean success = transactionManager.undoTransaction(token, undoNumber);
+        if (success) {
+            out.println("RESULT OK: Undo executed");
+        } else {
+            out.println("RESULT ERROR: No se pudo ejecutar undo");
+        }
+    }
+    
+    private String extraerTablaDeConsulta(String consulta) {
+        String[] tokens = consulta.trim().split("\\s+");
+        if (tokens.length < 2) return null;
+        
+        String comando = tokens[0].toUpperCase();
+        switch (comando) {
+            case "SUMMON":
+                if (tokens.length > 2 && "TABLE".equals(tokens[1].toUpperCase())) {
+                    return tokens[2];
+                }
+                break;
+            case "BURN":
+                if (tokens.length > 2 && "TABLE".equals(tokens[1].toUpperCase())) {
+                    return tokens[2];
+                }
+                break;
+            case "FILE":
+                if (tokens.length > 1) {
+                    return tokens[1];
+                }
+                break;
+            case "MORPH":
+                if (tokens.length > 1) {
+                    return tokens[1];
+                }
+                break;
+            case "SWEEP":
+                if (tokens.length > 1) {
+                    return tokens[1];
+                }
+                break;
+            case "REWRITE":
+                if (tokens.length > 1) {
+                    return tokens[1];
+                }
+                break;
+        }
+        return null;
     }
 
     public String obtenerEsquemasJerarquicos() {

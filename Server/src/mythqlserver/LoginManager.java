@@ -34,6 +34,7 @@ public class LoginManager {
             }
             
             String token = UUID.randomUUID().toString();
+            user.setToken(token);
             sesiones.put(token, user);
             out.println("OK " + token);
             log("Usuario autenticado: " + username + " -> Token: " + token);

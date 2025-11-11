@@ -7,6 +7,7 @@ public class User {
     private String password;
     private List<String> roles;
     private String baseActiva;
+    private String token;
 
     public User(String username, String password, List<String> roles) {
         this.username = username;
@@ -17,6 +18,7 @@ public class User {
     public String getUsername() { return username; }
     public String getPassword() { return password; }
     public List<String> getRoles() { return roles; }
+    public String getToken() { return token; }
 
     @Override
     public String toString() {
@@ -29,5 +31,9 @@ public class User {
 
     public void setBaseActiva(String baseActiva) {
         this.baseActiva = baseActiva;
+    }
+    
+    public void setToken(String token) {
+        this.token = token;
     }
 }

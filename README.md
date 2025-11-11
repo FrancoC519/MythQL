@@ -14,3 +14,4 @@
 
 [UML Holy Grail](https://www.uml-diagrams.org/)
 
+[Manual tecnico](https://docs.google.com/document/d/19oW8bGbGBlQ-NYFQAq9-zk5rWSqbXVXXwQ-9a1bXBT0/edit?tab=t.0)

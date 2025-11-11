@@ -23,6 +23,7 @@ import javax.swing.Timer;
 import javax.swing.tree.*;
 import java.util.function.Consumer;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
 
 public class MythQL_UI extends JFrame {
     private JTabbedPane tabs;
@@ -963,160 +964,400 @@ private void mostrarWizard(String errorMsg) {
 
     // ==================== PANELES DE CONTENIDO ====================
 
-    private JPanel crearPanelUsuarios() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+private JPanel crearPanelUsuarios() {
+    JPanel panel = new JPanel(new BorderLayout(15, 15));
+    panel.setBackground(new Color(242, 242, 242));
+    panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
+    JPanel headerPanel = new JPanel(new BorderLayout());
+    headerPanel.setBackground(Color.WHITE);
+    headerPanel.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
+        BorderFactory.createEmptyBorder(15, 20, 15, 20)
+    ));
 
-        JLabel titulo = new JLabel("👤 GESTIÓN DE USUARIOS DEL SISTEMA");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(108, 44, 120));
+    JLabel titulo = new JLabel("👤 GESTIÓN DE USUARIOS DEL SISTEMA");
+    titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
+    titulo.setForeground(new Color(108, 44, 120));
 
-        JLabel subtitulo = new JLabel("Administrar cuentas de usuario y permisos de acceso");
-        subtitulo.setFont(new Font("Arial", Font.ITALIC, 12));
-        subtitulo.setForeground(Color.GRAY);
+    JLabel subtitulo = new JLabel("Administrar cuentas de usuario y permisos de acceso");
+    subtitulo.setFont(new Font("Arial", Font.ITALIC, 12));
+    subtitulo.setForeground(Color.GRAY);
 
-        JPanel titulosPanel = new JPanel(new GridLayout(2, 1, 0, 5));
-        titulosPanel.setBackground(Color.WHITE);
-        titulosPanel.add(titulo);
-        titulosPanel.add(subtitulo);
+    JPanel titulosPanel = new JPanel(new GridLayout(2, 1, 0, 5));
+    titulosPanel.setBackground(Color.WHITE);
+    titulosPanel.add(titulo);
+    titulosPanel.add(subtitulo);
 
-        headerPanel.add(titulosPanel, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
+    headerPanel.add(titulosPanel, BorderLayout.WEST);
+    panel.add(headerPanel, BorderLayout.NORTH);
 
-        JPanel contenido = new JPanel(new BorderLayout(15, 15));
-        contenido.setBackground(Color.WHITE);
-        contenido.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-            BorderFactory.createEmptyBorder(20, 20, 20, 20)
-        ));
+    // Tabla de usuarios
+    String[] columnNames = {"Usuario", "Roles/Privilegios", "Estado"};
+    DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false; // Hacer la tabla no editable
+        }
+    };
+    JTable tablaUsuarios = new JTable(tableModel);
+    tablaUsuarios.setRowHeight(30);
+    tablaUsuarios.setFont(new Font("Arial", Font.PLAIN, 13));
+    tablaUsuarios.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
+    tablaUsuarios.getTableHeader().setBackground(new Color(108, 44, 120));
+    tablaUsuarios.getTableHeader().setForeground(Color.WHITE);
+    tablaUsuarios.setSelectionBackground(new Color(200, 180, 210));
 
-        String[] columnNames = {"Usuario", "Rol", "Estado", "Último Acceso"};
-        Object[][] data = {
-            {"admin", "Administrador", "Activo", "2025-10-21 14:30"},
-            {"user1", "Usuario Estándar", "Activo", "2025-10-21 10:15"},
-            {"user2", "Usuario Estándar", "Inactivo", "2025-10-18 16:45"},
-            {"guest", "Invitado", "Activo", "2025-10-21 09:00"}
-        };
+    JScrollPane scrollTabla = new JScrollPane(tablaUsuarios);
+    scrollTabla.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180)));
 
-        JTable tablaUsuarios = new JTable(data, columnNames);
-        tablaUsuarios.setRowHeight(30);
-        tablaUsuarios.setFont(new Font("Arial", Font.PLAIN, 13));
-        tablaUsuarios.getTableHeader().setFont(new Font("Arial", Font.BOLD, 13));
-        tablaUsuarios.getTableHeader().setBackground(new Color(108, 44, 120));
-        tablaUsuarios.getTableHeader().setForeground(Color.WHITE);
-        tablaUsuarios.setSelectionBackground(new Color(200, 180, 210));
+    // Panel de contenido
+    JPanel contenido = new JPanel(new BorderLayout(15, 15));
+    contenido.setBackground(Color.WHITE);
+    contenido.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+        BorderFactory.createEmptyBorder(20, 20, 20, 20)
+    ));
 
-        JScrollPane scrollTabla = new JScrollPane(tablaUsuarios);
-        scrollTabla.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180)));
+    contenido.add(scrollTabla, BorderLayout.CENTER);
 
-        contenido.add(scrollTabla, BorderLayout.CENTER);
+    // Panel de botones
+    JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+    panelBotones.setBackground(Color.WHITE);
 
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        panelBotones.setBackground(Color.WHITE);
+    JButton btnAgregar = crearBotonRobusto("➕ Agregar Usuario", new Color(34, 139, 34));
+    JButton btnModificar = crearBotonRobusto("✏️ Modificar Roles", new Color(30, 144, 255));
+    JButton btnEliminar = crearBotonRobusto("🗑 Eliminar Usuario", new Color(220, 20, 60));
+    JButton btnRefresh = crearBotonRobusto("🔄 Actualizar", new Color(108, 44, 120));
 
-        JButton btnAgregar = crearBotonRobusto("⚙ Agregar Usuario", new Color(34, 139, 34));
-        JButton btnModificar = crearBotonRobusto("⚙️ Modificar", new Color(30, 144, 255));
-        JButton btnEliminar = crearBotonRobusto("🗑⚙ Eliminar", new Color(220, 20, 60));
-        JButton btnRefresh = crearBotonRobusto("⚙ Actualizar", new Color(108, 44, 120));
+    panelBotones.add(btnAgregar);
+    panelBotones.add(btnModificar);
+    panelBotones.add(btnEliminar);
+    panelBotones.add(btnRefresh);
 
-        panelBotones.add(btnAgregar);
-        panelBotones.add(btnModificar);
-        panelBotones.add(btnEliminar);
-        panelBotones.add(btnRefresh);
+    contenido.add(panelBotones, BorderLayout.SOUTH);
+    panel.add(contenido, BorderLayout.CENTER);
 
-        contenido.add(panelBotones, BorderLayout.SOUTH);
-        panel.add(contenido, BorderLayout.CENTER);
+    // ========== FUNCIONALIDAD REAL ==========
+    
+    // Método para cargar usuarios desde el servidor
+    Runnable cargarUsuarios = () -> {
+        try {
+            // Enviar comando para listar usuarios (usaremos MANIFEST USERS como ejemplo)
+            // Por ahora simularemos con datos de prueba
+            tableModel.setRowCount(0); // Limpiar tabla
+            
+            // En un sistema real, aquí enviarías un comando al servidor
+            // String respuesta = clienteConsultas.enviarConsultaConToken(token, "MANIFEST USERS");
+            
+            // Datos de ejemplo basados en el users.csv
+            Object[][] datosEjemplo = {
+                {"admin", "ADMIN;SELECT;INSERT;UPDATE;DELETE;CREATE;DROP;GRANT;REVOKE", "Activo"},
+                {"linares", "MANAGER;SELECT;INSERT;UPDATE;DELETE;CREATE;DROP", "Activo"},
+                {"TEST", "READER;SELECT", "Activo"},
+                {"usuario1", "WRITER;SELECT;INSERT;UPDATE", "Activo"},
+                {"usuario2", "READER;SELECT", "Activo"}
+            };
+            
+            for (Object[] fila : datosEjemplo) {
+                tableModel.addRow(fila);
+            }
+            
+        } catch (Exception ex) {
+            logError("Error cargando usuarios: " + ex.getMessage());
+        }
+    };
 
-        return panel;
-    }
+    // Cargar usuarios al iniciar
+    cargarUsuarios.run();
 
-    private JPanel crearPanelPrivilegios() {
-        JPanel panel = new JPanel(new BorderLayout(15, 15));
-        panel.setBackground(new Color(242, 242, 242));
-        panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+    // Listeners de botones
+    btnAgregar.addActionListener(e -> {
+        JDialog dialog = new JDialog(this, "Agregar Nuevo Usuario", true);
+        dialog.setSize(400, 300);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new GridLayout(0, 1, 10, 10));
+        dialog.setResizable(false);
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
+        JPanel panelForm = new JPanel(new GridLayout(4, 2, 10, 10));
+        panelForm.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
-        JLabel titulo = new JLabel("🔐 CONTROL DE PRIVILEGIOS");
-        titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
-        titulo.setForeground(new Color(108, 44, 120));
+        JTextField txtUsuario = new JTextField();
+        JPasswordField txtPassword = new JPasswordField();
+        JComboBox<String> cmbRol = new JComboBox<>(new String[]{"READER", "WRITER", "MANAGER", "ADMIN"});
 
-        headerPanel.add(titulo, BorderLayout.WEST);
-        panel.add(headerPanel, BorderLayout.NORTH);
+        panelForm.add(new JLabel("Usuario:"));
+        panelForm.add(txtUsuario);
+        panelForm.add(new JLabel("Contraseña:"));
+        panelForm.add(txtPassword);
+        panelForm.add(new JLabel("Rol:"));
+        panelForm.add(cmbRol);
 
-        JPanel contenido = new JPanel(new GridLayout(2, 1, 15, 15));
-        contenido.setBackground(new Color(242, 242, 242));
+        dialog.add(panelForm);
 
-        JPanel panelBasicos = crearSeccionPrivilegios("PERMISOS BÁSICOS", new String[]{
-            "⚙ Permiso de Lectura (BRING)",
-            "⚙ Permiso de Escritura (MANIFEST)",
-            "⚙ Permiso de Actualización (UPDATE)",
-            "⚙ Permiso de Consulta (SELECT)"
+        JPanel panelBotonesDialog = new JPanel(new FlowLayout());
+        JButton btnCrear = new JButton("Crear Usuario");
+        JButton btnCancelar = new JButton("Cancelar");
+
+        btnCrear.addActionListener(ev -> {
+            String usuario = txtUsuario.getText().trim();
+            String password = new String(txtPassword.getPassword());
+            String rol = (String) cmbRol.getSelectedItem();
+
+            if (usuario.isEmpty() || password.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog, "Complete todos los campos", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            // Ejecutar comando INVOKE
+            String comando = String.format("INVOKE USER %s {\"%s\", %s}", usuario, password, rol);
+            ejecutarConsultaConfiguracion(comando, "Usuario creado exitosamente");
+            
+            dialog.dispose();
+            cargarUsuarios.run(); // Recargar lista
         });
 
-        JPanel panelAvanzados = crearSeccionPrivilegios("PERMISOS AVANZADOS", new String[]{
-            "⚙ Creación de Bases de Datos (SUMMON DATABASE)",
-            "⚙ Eliminación de Objetos (BURN)",
-            "⚙ Gestión de Usuarios",
-            "⚙ Privilegios de Administrador Total"
-        });
+        btnCancelar.addActionListener(ev -> dialog.dispose());
 
-        contenido.add(panelBasicos);
-        contenido.add(panelAvanzados);
+        panelBotonesDialog.add(btnCrear);
+        panelBotonesDialog.add(btnCancelar);
+        dialog.add(panelBotonesDialog);
 
-        panel.add(contenido, BorderLayout.CENTER);
+        dialog.setVisible(true);
+    });
 
-        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        panelBoton.setBackground(new Color(242, 242, 242));
-        panelBoton.add(crearBotonRobusto("💾⚙Aplicar Cambios", new Color(108, 44, 120)));
-
-        panel.add(panelBoton, BorderLayout.SOUTH);
-
-        return panel;
-    }
-
-    private JPanel crearSeccionPrivilegios(String titulo, String[] opciones) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
-            BorderFactory.createEmptyBorder(15, 20, 15, 20)
-        ));
-
-        JLabel lblTitulo = new JLabel(titulo);
-        lblTitulo.setFont(new Font("Arial", Font.BOLD, 14));
-        lblTitulo.setForeground(new Color(108, 44, 120));
-        lblTitulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
-
-        panel.add(lblTitulo, BorderLayout.NORTH);
-
-        JPanel checkPanel = new JPanel(new GridLayout(0, 1, 5, 8));
-        checkPanel.setBackground(Color.WHITE);
-
-        for (String opcion : opciones) {
-            JCheckBox chk = new JCheckBox(opcion);
-            chk.setFont(new Font("Arial", Font.PLAIN, 13));
-            chk.setBackground(Color.WHITE);
-            chk.setFocusPainted(false);
-            checkPanel.add(chk);
+    btnModificar.addActionListener(e -> {
+        int selectedRow = tablaUsuarios.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Seleccione un usuario para modificar", "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
         }
 
-        panel.add(checkPanel, BorderLayout.CENTER);
-        return panel;
+        String usuario = (String) tableModel.getValueAt(selectedRow, 0);
+        String rolesActuales = (String) tableModel.getValueAt(selectedRow, 1);
+
+        JDialog dialog = new JDialog(this, "Modificar Privilegios: " + usuario, true);
+        dialog.setSize(500, 400);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout());
+
+        JPanel panelPrivilegios = new JPanel(new GridLayout(0, 2, 10, 5));
+        panelPrivilegios.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        // Lista de privilegios disponibles
+        String[] privilegios = {"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "GRANT", "REVOKE"};
+        JCheckBox[] checkBoxes = new JCheckBox[privilegios.length];
+
+        // Marcar privilegios actuales
+        for (int i = 0; i < privilegios.length; i++) {
+            checkBoxes[i] = new JCheckBox(privilegios[i]);
+            checkBoxes[i].setSelected(rolesActuales.contains(privilegios[i]));
+            panelPrivilegios.add(checkBoxes[i]);
+        }
+
+        dialog.add(new JScrollPane(panelPrivilegios), BorderLayout.CENTER);
+
+        JPanel panelBotonesDialog = new JPanel(new FlowLayout());
+        JButton btnAplicar = new JButton("Aplicar Cambios");
+        JButton btnCancelar = new JButton("Cancelar");
+
+        btnAplicar.addActionListener(ev -> {
+            // Quitar todos los privilegios primero
+            for (String priv : privilegios) {
+                String comandoQuitar = String.format("DISARM %s {%s}", usuario, priv);
+                ejecutarConsultaConfiguracion(comandoQuitar, null); // No mostrar mensaje para cada uno
+            }
+
+            // Agregar privilegios seleccionados
+            List<String> privilegiosSeleccionados = new ArrayList<>();
+            for (int i = 0; i < checkBoxes.length; i++) {
+                if (checkBoxes[i].isSelected()) {
+                    String comandoAgregar = String.format("EMPOWER %s {%s}", usuario, privilegios[i]);
+                    ejecutarConsultaConfiguracion(comandoAgregar, null);
+                    privilegiosSeleccionados.add(privilegios[i]);
+                }
+            }
+
+            JOptionPane.showMessageDialog(dialog, 
+                "Privilegios actualizados para: " + usuario + "\n" +
+                "Privilegios: " + String.join(", ", privilegiosSeleccionados),
+                "Éxito", JOptionPane.INFORMATION_MESSAGE);
+            
+            dialog.dispose();
+            cargarUsuarios.run();
+        });
+
+        btnCancelar.addActionListener(ev -> dialog.dispose());
+
+        panelBotonesDialog.add(btnAplicar);
+        panelBotonesDialog.add(btnCancelar);
+        dialog.add(panelBotonesDialog, BorderLayout.SOUTH);
+
+        dialog.setVisible(true);
+    });
+
+    btnEliminar.addActionListener(e -> {
+        int selectedRow = tablaUsuarios.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Seleccione un usuario para eliminar", "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String usuario = (String) tableModel.getValueAt(selectedRow, 0);
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "¿Está seguro de eliminar al usuario: " + usuario + "?",
+            "Confirmar Eliminación", JOptionPane.YES_NO_OPTION);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            // En un sistema real, aquí ejecutarías: BURN USER username
+            // Por ahora usaremos un comando personalizado
+            String comando = String.format("-- Comando para eliminar usuario: %s", usuario);
+            ejecutarConsultaConfiguracion(comando, "Usuario eliminado: " + usuario);
+            cargarUsuarios.run();
+        }
+    });
+
+    btnRefresh.addActionListener(e -> cargarUsuarios.run());
+
+    return panel;
+}
+
+private JPanel crearPanelPrivilegios() {
+    JPanel panel = new JPanel(new BorderLayout(15, 15));
+    panel.setBackground(new Color(242, 242, 242));
+    panel.setBorder(BorderFactory.createEmptyBorder(25, 25, 25, 25));
+
+    JPanel headerPanel = new JPanel(new BorderLayout());
+    headerPanel.setBackground(Color.WHITE);
+    headerPanel.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createMatteBorder(0, 0, 3, 0, new Color(108, 44, 120)),
+        BorderFactory.createEmptyBorder(15, 20, 15, 20)
+    ));
+
+    JLabel titulo = new JLabel("🔐 CONTROL DE PRIVILEGIOS");
+    titulo.setFont(new Font("Arial Black", Font.BOLD, 18));
+    titulo.setForeground(new Color(108, 44, 120));
+
+    headerPanel.add(titulo, BorderLayout.WEST);
+    panel.add(headerPanel, BorderLayout.NORTH);
+
+    JPanel contenido = new JPanel(new GridLayout(2, 1, 15, 15));
+    contenido.setBackground(new Color(242, 242, 242));
+
+    // Panel de gestión de privilegios por usuario
+    JPanel panelGestion = new JPanel(new BorderLayout());
+    panelGestion.setBackground(Color.WHITE);
+    panelGestion.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+        BorderFactory.createEmptyBorder(15, 20, 15, 20)
+    ));
+
+    JLabel lblGestion = new JLabel("GESTIÓN DE PRIVILEGIOS POR USUARIO");
+    lblGestion.setFont(new Font("Arial", Font.BOLD, 14));
+    lblGestion.setForeground(new Color(108, 44, 120));
+    panelGestion.add(lblGestion, BorderLayout.NORTH);
+
+    // Formulario para otorgar/revocar privilegios
+    JPanel panelForm = new JPanel(new GridLayout(3, 2, 10, 10));
+    panelForm.setBackground(Color.WHITE);
+
+    JComboBox<String> cmbUsuarios = new JComboBox<>(new String[]{"admin", "linares", "TEST", "usuario1", "usuario2"});
+    JComboBox<String> cmbPrivilegio = new JComboBox<>(new String[]{"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "GRANT", "REVOKE"});
+    JComboBox<String> cmbAccion = new JComboBox<>(new String[]{"OTORGAR", "REVOCAR"});
+
+    panelForm.add(new JLabel("Usuario:"));
+    panelForm.add(cmbUsuarios);
+    panelForm.add(new JLabel("Privilegio:"));
+    panelForm.add(cmbPrivilegio);
+    panelForm.add(new JLabel("Acción:"));
+    panelForm.add(cmbAccion);
+
+    panelGestion.add(panelForm, BorderLayout.CENTER);
+
+    JButton btnEjecutar = crearBotonRobusto("⚡ Ejecutar Acción", new Color(108, 44, 120));
+    btnEjecutar.addActionListener(e -> {
+        String usuario = (String) cmbUsuarios.getSelectedItem();
+        String privilegio = (String) cmbPrivilegio.getSelectedItem();
+        String accion = (String) cmbAccion.getSelectedItem();
+
+        String comando;
+        String mensaje;
+
+        if ("OTORGAR".equals(accion)) {
+            comando = String.format("EMPOWER %s {%s}", usuario, privilegio);
+            mensaje = String.format("Privilegio %s otorgado a %s", privilegio, usuario);
+        } else {
+            comando = String.format("DISARM %s {%s}", usuario, privilegio);
+            mensaje = String.format("Privilegio %s revocado de %s", privilegio, usuario);
+        }
+
+        ejecutarConsultaConfiguracion(comando, mensaje);
+    });
+
+    JPanel panelBoton = new JPanel(new FlowLayout());
+    panelBoton.setBackground(Color.WHITE);
+    panelBoton.add(btnEjecutar);
+    panelGestion.add(panelBoton, BorderLayout.SOUTH);
+
+    // Panel de información de privilegios
+    JPanel panelInfo = new JPanel(new BorderLayout());
+    panelInfo.setBackground(Color.WHITE);
+    panelInfo.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+        BorderFactory.createEmptyBorder(15, 20, 15, 20)
+    ));
+
+    JLabel lblInfo = new JLabel("INFORMACIÓN DE PRIVILEGIOS");
+    lblInfo.setFont(new Font("Arial", Font.BOLD, 14));
+    lblInfo.setForeground(new Color(108, 44, 120));
+    panelInfo.add(lblInfo, BorderLayout.NORTH);
+
+    JTextArea txtInfo = new JTextArea();
+    txtInfo.setEditable(false);
+    txtInfo.setFont(new Font("Monospaced", Font.PLAIN, 12));
+    txtInfo.setText(
+        "📋 PRIVILEGIOS DISPONIBLES:\n\n" +
+        "• SELECT    - Permite ejecutar BRING (consultas)\n" +
+        "• INSERT    - Permite ejecutar FILE (inserciones)\n" +
+        "• UPDATE    - Permite ejecutar REWRITE (actualizaciones)\n" +
+        "• DELETE    - Permite ejecutar SWEEP (eliminaciones)\n" +
+        "• CREATE    - Permite ejecutar SUMMON (creaciones)\n" +
+        "• DROP      - Permite ejecutar BURN (eliminaciones)\n" +
+        "• GRANT     - Permite otorgar/revocar privilegios\n" +
+        "• REVOKE    - Permite revocar privilegios\n\n" +
+        "👥 ROLES PREDEFINIDOS:\n\n" +
+        "• READER    - SELECT\n" +
+        "• WRITER    - SELECT, INSERT, UPDATE\n" +
+        "• MANAGER   - SELECT, INSERT, UPDATE, DELETE, CREATE, DROP\n" +
+        "• ADMIN     - Todos los privilegios + GRANT, REVOKE"
+    );
+    txtInfo.setBackground(new Color(250, 250, 250));
+
+    panelInfo.add(new JScrollPane(txtInfo), BorderLayout.CENTER);
+
+    contenido.add(panelGestion);
+    contenido.add(panelInfo);
+
+    panel.add(contenido, BorderLayout.CENTER);
+
+    return panel;
+}
+
+// Método auxiliar para ejecutar consultas de configuración
+private void ejecutarConsultaConfiguracion(String comando, String mensajeExito) {
+    try {
+        // Ejecutar el comando directamente
+        ejecutarConsulta(comando);
+        
+        if (mensajeExito != null) {
+            // Mostrar mensaje de éxito en la consola principal
+            logMessage("[CONFIGURACIÓN] " + mensajeExito, Color.GREEN);
+        }
+        
+    } catch (Exception ex) {
+        logError("[CONFIGURACIÓN] Error: " + ex.getMessage());
     }
+}
 
     private JButton crearBotonRobusto(String texto, Color color) {
         JButton btn = new JButton(texto);

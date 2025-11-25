@@ -205,8 +205,7 @@ public class GestorConsultas {
         
         // Lista de privilegios válidos
         List<String> privilegiosValidos = List.of(
-            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
-            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+            "BRING", "FILE", "REWRITE", "BURN", "SUMMON", "SWEEP", "EMPOWER", "DISARM"
         );
 
         while (i < tokens.size() && !"}".equals(tokens.get(i))) {
@@ -283,8 +282,7 @@ public class GestorConsultas {
         
         // Lista de privilegios válidos
         List<String> privilegiosValidos = List.of(
-            "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", 
-            "GRANT", "REVOKE", "BACKUP", "RESTORE", "ALL"
+            "BRING", "FILE", "REWRITE", "BURN", "SUMMON", "SWEEP", "EMPOWER", "DISARM" 
         );
 
         while (i < tokens.size() && !"}".equals(tokens.get(i))) {

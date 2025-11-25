@@ -87,16 +87,16 @@ public class QueryProcessor {
         
         // Mapeo de comandos a permisos requeridos
         Map<String, List<String>> permisosRequeridos = Map.of(
-            "BRING", List.of("SELECT", "READER", "WRITER", "MANAGER", "ADMIN", "OWNER"),
-            "FILE", List.of("INSERT", "WRITER", "MANAGER", "ADMIN", "OWNER"),
-            "REWRITE", List.of("UPDATE", "WRITER", "MANAGER", "ADMIN", "OWNER"),
-            "SUMMON", List.of("CREATE", "MANAGER", "ADMIN", "OWNER"),
-            "BURN", List.of("DROP", "MANAGER", "ADMIN", "OWNER"),
-            "MORPH", List.of("ALTER", "MANAGER", "ADMIN", "OWNER"),
-            "SWEEP", List.of("DELETE", "MANAGER", "ADMIN", "OWNER"),
-            "INVOKE", List.of("GRANT", "ADMIN", "OWNER"),
-            "EMPOWER", List.of("GRANT", "ADMIN", "OWNER"),
-            "DISARM", List.of("REVOKE", "ADMIN", "OWNER")
+            "BRING", List.of("BRING", "READER", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "FILE", List.of("FILE", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "REWRITE", List.of("REWRITE", "WRITER", "MANAGER", "ADMIN", "OWNER"),
+            "SUMMON", List.of("SUMMON", "MANAGER", "ADMIN", "OWNER"),
+            "BURN", List.of("BURN", "MANAGER", "ADMIN", "OWNER"),
+            "MORPH", List.of("MORPH", "MANAGER", "ADMIN", "OWNER"),
+            "SWEEP", List.of("SWEEP", "MANAGER", "ADMIN", "OWNER"),
+            "INVOKE", List.of("INVOKE", "ADMIN", "OWNER"),
+            "EMPOWER", List.of("EMPOWER", "ADMIN", "OWNER"),
+            "DISARM", List.of("DISARM", "ADMIN", "OWNER")
         );
         
         List<String> permisosNecesarios = permisosRequeridos.getOrDefault(comando, List.of());

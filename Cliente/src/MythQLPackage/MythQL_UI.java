@@ -1145,7 +1145,7 @@ private JPanel crearPanelUsuarios() {
         panelPrivilegios.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         // Lista de privilegios disponibles
-        String[] privilegios = {"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "GRANT", "REVOKE"};
+        String[] privilegios = {"BRING", "FILE", "REWRITE", "BURN", "SUMMON", "SWEEP", "EMPOWER", "DISARM"};
         JCheckBox[] checkBoxes = new JCheckBox[privilegios.length];
 
         // Marcar privilegios actuales
@@ -1262,7 +1262,7 @@ private JPanel crearPanelPrivilegios() {
     panelForm.setBackground(Color.WHITE);
 
     JComboBox<String> cmbUsuarios = new JComboBox<>(new String[]{"admin", "linares", "TEST", "usuario1", "usuario2"});
-    JComboBox<String> cmbPrivilegio = new JComboBox<>(new String[]{"SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "DROP", "GRANT", "REVOKE"});
+    JComboBox<String> cmbPrivilegio = new JComboBox<>(new String[]{"BRING", "FILE", "REWRITE", "BURN", "SUMMON", "SWEEP", "EMPOWER", "DISARM"});
     JComboBox<String> cmbAccion = new JComboBox<>(new String[]{"OTORGAR", "REVOCAR"});
 
     panelForm.add(new JLabel("Usuario:"));
@@ -1317,19 +1317,19 @@ private JPanel crearPanelPrivilegios() {
     txtInfo.setFont(new Font("Monospaced", Font.PLAIN, 12));
     txtInfo.setText(
         "📋 PRIVILEGIOS DISPONIBLES:\n\n" +
-        "• SELECT    - Permite ejecutar BRING (consultas)\n" +
-        "• INSERT    - Permite ejecutar FILE (inserciones)\n" +
-        "• UPDATE    - Permite ejecutar REWRITE (actualizaciones)\n" +
-        "• DELETE    - Permite ejecutar SWEEP (eliminaciones)\n" +
-        "• CREATE    - Permite ejecutar SUMMON (creaciones)\n" +
-        "• DROP      - Permite ejecutar BURN (eliminaciones)\n" +
-        "• GRANT     - Permite otorgar/revocar privilegios\n" +
-        "• REVOKE    - Permite revocar privilegios\n\n" +
+        "• BRING    - Permite ejecutar BRING (consultas)\n" +
+        "• FILE    - Permite ejecutar FILE (inserciones)\n" +
+        "• REWRITE    - Permite ejecutar REWRITE (actualizaciones)\n" +
+        "• SWEEP    - Permite ejecutar SWEEP (eliminaciones)\n" +
+        "• SUMMON    - Permite ejecutar SUMMON (creaciones)\n" +
+        "• BURN      - Permite ejecutar BURN (eliminaciones)\n" +
+        "• EMPOWER     - Permite otorgar/revocar privilegios\n" +
+        "• DISARM    - Permite revocar privilegios\n\n" +
         "👥 ROLES PREDEFINIDOS:\n\n" +
-        "• READER    - SELECT\n" +
-        "• WRITER    - SELECT, INSERT, UPDATE\n" +
-        "• MANAGER   - SELECT, INSERT, UPDATE, DELETE, CREATE, DROP\n" +
-        "• ADMIN     - Todos los privilegios + GRANT, REVOKE"
+        "• READER    - BRING\n" +
+        "• WRITER    - BRING, FILE, REWRITE\n" +
+        "• MANAGER   - BRING, FILE, REWRITE, SWEEP, SUMMON, BURN\n" +
+        "• ADMIN     - Todos los privilegios + EMPOWER, DISARM"
     );
     txtInfo.setBackground(new Color(250, 250, 250));
 
